@@ -2,26 +2,17 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Notifications\Notifiable;
-use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Database\Eloquent\Model;
 
-class User extends Authenticatable
+class Guardians extends Model
 {
-    use HasApiTokens, HasFactory, Notifiable;
+    use HasFactory;
 
     /**
      * Indicates if the model should be timestamped.
      */
     public $timestamps = false;
-    
-    /**
-     * The name of the "created at" column.
-     */
-    const CREATED_AT = 'created_at';
-
 
     /**
      * The attributes that are mass assignable.
@@ -31,22 +22,13 @@ class User extends Authenticatable
     protected $fillable = [
         'firstName',
         'lastName',
-        'email',
-        'password',
         'phone',
-        'status',
+        'email',
+        'photo',
         '2facode',
-        'profilePhoto',
-    ];
-
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var array<int, string>
-     */
-    protected $hidden = [
         'password',
-        '2facode',
+        'status',
+        'created_at',
     ];
 
     /**

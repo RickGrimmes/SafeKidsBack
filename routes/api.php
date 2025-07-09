@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\GuardianController;
+use App\Http\Controllers\UserController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -17,3 +19,21 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
+
+Route::prefix('api1')->group(function () {
+
+    // USERS
+    Route::get('users', [UserController::class, 'index']);
+    Route::get('users/{id}', [UserController::class, 'show']);
+    Route::post('users/login', [UserController::class, 'login']);
+
+    // GUARDIANS
+    Route::post('guardians/register', [GuardianController::class, 'register']);
+    Route::post('guardians/login', [GuardianController::class, 'login']);
+    Route::get('guardians/{id}', [GuardianController::class, 'show']);
+
+    
+});
+
+
+

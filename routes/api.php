@@ -23,9 +23,9 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 Route::prefix('api1')->group(function () {
 
     // USERS
-    Route::get('users', [UserController::class, 'index']);
-    Route::get('users/{id}', [UserController::class, 'show']);
+    Route::post('users/register', [UserController::class, 'register']);
     Route::post('users/login', [UserController::class, 'login']);
+    Route::get('users/type/{type}', [UserController::class, 'index']);
 
     // GUARDIANS
     Route::post('guardians/register', [GuardianController::class, 'register']);

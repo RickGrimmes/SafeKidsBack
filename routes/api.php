@@ -26,6 +26,8 @@ Route::prefix('api1')->group(function () {
     Route::post('users/register', [UserController::class, 'register']);
     Route::post('users/login', [UserController::class, 'login']);
     Route::get('users/type/{type}', [UserController::class, 'index']);
+    Route::post('users/reset-password', [UserController::class, 'resetPassword']);
+    Route::post('users/verify-2fa', [UserController::class, 'verify2FA']);
 
     // GUARDIANS
     Route::post('guardians/register', [GuardianController::class, 'register']);

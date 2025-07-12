@@ -7,6 +7,8 @@ use App\Models\UserRole;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\ResetPasswordMail;
 
 class UserController extends Controller
 {
@@ -105,6 +107,17 @@ class UserController extends Controller
                     ], 403);
                 }
 
+                $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+                $user->update(['2facode' => $code]);
+
+                $temporaryToken = base64_encode(json_encode([
+                    'email' => $user->email,
+                    'expires_at' => now()->addMinutes(15)->timestamp,
+                ]));
+
+                Mail::to($user->email)->send(new ResetPasswordMail($user, $code));
+
+
                 return response()->json([
                     'success' => true,
                     'message' => 'Login successful',
@@ -146,5 +159,125 @@ class UserController extends Controller
             'data' => $users,
             'timestamp' => now(),
         ], 200);
+    }
+
+    public function resetPassword(Request $request)
+    {
+        try
+        {
+            $validator = Validator::make($request->all(), [
+                'email' => 'required|email',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Email is required and must be valid',
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            $user = User::where('email', $request->email)->first();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found',
+                    'timestamp' => now(),
+                ], 404);
+            }
+
+            $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
+            $user->update(['2facode' => $code]);
+
+            Mail::to($user->email)->send(new ResetPasswordMail($user, $code));
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Reset password email sent',
+                'timestamp' => now(),
+            ], 200);
+        }
+        catch (\Exception $e)
+        {
+            return response()->json([
+                'success' => false,
+                'message' => 'Server failed',
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+
+    public function verify2fa(Request $request)
+    {
+        try
+        {
+            $validator = Validator::make($request->all(), [
+                'temporaryToken' => 'required|string',
+                'code' => 'required|string|size:6',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed, emporary token and 6-digit code are required',
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            $tokenData = json_decode(base64_decode($request->temporaryToken), true);
+
+            if (!$tokenData || !isset($tokenData['email'], $tokenData['expires_at'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid temporary token',
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            if (now()->timestamp > $tokenData['expires_at']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Temporary token has expired',
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            $user = User::where('email', $tokenData['email'])->first();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found',
+                    'timestamp' => now(),
+                ], 404);
+            }
+
+            if ($user->{'2facode'} !== $request->code) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid 2FA code',
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            $user->update(['2facode' => null]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Login completed successfully',
+                'data' => $user->makeHidden(['password', '2facode', 'created_at']),
+                'timestamp' => now(),
+            ], 200);
+        }
+        catch (\Exception $e) 
+        {
+            return response()->json([
+                'success' => false,
+                'message' => 'Server failed',
+                'timestamp' => now(),
+            ], 500);
+        }
     }
 }

@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\ResetPasswordMail;
+use App\Mail\TwoFactorAuthMail;
 
 class UserController extends Controller
 {
@@ -21,7 +22,7 @@ class UserController extends Controller
                 'lastName' => 'required|string|max:50',
                 'phone' => 'required|string|max:10',
                 'email' => 'required|email|unique:users,email',
-                'photo' => 'required|string',
+                'profilePhoto' => 'required|string',
                 'password' => 'required|string|min:8',
             ]);
             
@@ -35,7 +36,7 @@ class UserController extends Controller
                     $msg = 'El teléfono es obligatorio y debe tener máximo 10 dígitos.';
                 } elseif ($errors->has('email')) {
                     $msg = 'El correo es obligatorio, debe ser válido y único.';
-                } elseif ($errors->has('photo')) {
+                } elseif ($errors->has('profilePhoto')) {
                     $msg = 'La foto es obligatoria.';
                 } elseif ($errors->has('password')) {
                     $msg = 'La contraseña es obligatoria y debe tener mínimo 8 caracteres.';
@@ -55,7 +56,7 @@ class UserController extends Controller
                 'lastName' => $request->lastName,
                 'phone' => $request->phone,
                 'email' => $request->email,
-                'photo' => $request->photo,
+                'profilePhoto' => $request->profilePhoto,
                 'password' => Hash::make($request->password),
                 'status' => true,
             ]);
@@ -115,13 +116,13 @@ class UserController extends Controller
                     'expires_at' => now()->addMinutes(15)->timestamp,
                 ]));
 
-                Mail::to($user->email)->send(new ResetPasswordMail($user, $code));
-
+                Mail::to($user->email)->send(new TwoFactorAuthMail($user, $code));
 
                 return response()->json([
                     'success' => true,
                     'message' => 'Login successful',
                     'data' => $user,
+                    'temporaryToken' => $temporaryToken,
                     'timestamp' => now(),
                 ], 200);
             }

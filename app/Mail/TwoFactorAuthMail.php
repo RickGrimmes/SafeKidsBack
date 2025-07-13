@@ -3,10 +3,13 @@
 namespace App\Mail;
 
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Content;
+use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class ResetPasswordMail extends Mailable
+class TwoFactorAuthMail extends Mailable
 {
     use Queueable, SerializesModels;
 
@@ -15,6 +18,7 @@ class ResetPasswordMail extends Mailable
 
     /**
      * Create a new message instance.
+     *
      */
     public function __construct($user, $code)
     {
@@ -24,7 +28,7 @@ class ResetPasswordMail extends Mailable
 
     public function build()
     {
-        return $this->subject('Restablecer contraseña Safe Kids')
-                    ->view('emails.reset-password');
+        return $this->subject('Código de autenticación de dos factores')
+                    ->view('emails.two-factor-auth');
     }
 }

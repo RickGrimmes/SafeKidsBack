@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\ResetPasswordMail;
 use App\Mail\TwoFactorAuthMail;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class UserController extends Controller
 {
@@ -265,10 +266,15 @@ class UserController extends Controller
 
             $user->update(['2facode' => null]);
 
+            $token = JWTAuth::fromUser($user);
+
+            $userRole = UserRole::where('userId', $user->id)->first();
+
             return response()->json([
                 'success' => true,
                 'message' => 'Login completed successfully',
                 'data' => $user->makeHidden(['password', '2facode', 'created_at']),
+                'token' => $token,
                 'timestamp' => now(),
             ], 200);
         }
@@ -277,6 +283,25 @@ class UserController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Server failed',
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+
+    public function logout(Request $request)
+    {
+        try {
+            JWTAuth::invalidate(JWTAuth::getToken());
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Successfully logged out',
+                'timestamp' => now(),
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to logout',
                 'timestamp' => now(),
             ], 500);
         }

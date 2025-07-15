@@ -25,15 +25,21 @@ Route::prefix('api1')->group(function () {
     // USERS
     Route::post('users/register', [UserController::class, 'register']);
     Route::post('users/login', [UserController::class, 'login']);
-    Route::get('users/type/{type}', [UserController::class, 'index']);
+    //Route::get('users/type/{type}', [UserController::class, 'index']);
     Route::post('users/reset-password', [UserController::class, 'resetPassword']);
     Route::post('users/verify-2fa', [UserController::class, 'verify2FA']);
 
     // GUARDIANS
     Route::post('guardians/register', [GuardianController::class, 'register']);
     Route::post('guardians/login', [GuardianController::class, 'login']);
-    Route::get('guardians/{id}', [GuardianController::class, 'show']);
+    //Route::get('guardians/{id}', [GuardianController::class, 'show']);
 
+    Route::middleware('jwt.auth')->group(function () 
+    {
+        Route::get('users/type/{type}', [UserController::class, 'index']);
+        Route::post('users/logout', [UserController::class, 'logout']);
+        Route::get('guardians/{id}', [GuardianController::class, 'show']);
+    });
     
 });
 

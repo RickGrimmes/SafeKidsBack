@@ -2,17 +2,26 @@
 
 namespace App\Models;
 
+//use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
+use Tymon\JWTAuth\Contracts\JWTSubject;
 
-class Guardians extends Model
+class Guardians extends Authenticatable implements JWTSubject
 {
-    use HasFactory;
+    use HasApiTokens, HasFactory, Notifiable;
 
     /**
      * Indicates if the model should be timestamped.
      */
     public $timestamps = false;
+
+    /**
+     * The name of the "created at" column.
+     */
+    const CREATED_AT = 'created_at';
 
     /**
      * The attributes that are mass assignable.
@@ -28,7 +37,6 @@ class Guardians extends Model
         '2facode',
         'password',
         'status',
-        'created_at',
     ];
 
     /**
@@ -40,4 +48,14 @@ class Guardians extends Model
         'status' => 'boolean',
         'created_at' => 'datetime',
     ];
+
+    public function getJWTIdentifier()
+    {
+        return $this->getKey();
+    }
+
+    public function getJWTCustomClaims()
+    {
+        return [];
+    }
 }

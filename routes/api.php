@@ -16,28 +16,27 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-    return $request->user();
-});
-
 Route::prefix('api1')->group(function () {
 
     // USERS
-    Route::post('users/register', [UserController::class, 'register']);
     Route::post('users/login', [UserController::class, 'login']);
-    //Route::get('users/type/{type}', [UserController::class, 'index']);
     Route::post('users/reset-password', [UserController::class, 'resetPassword']);
     Route::post('users/verify-2fa', [UserController::class, 'verify2FA']);
+    //Route::get('users/type/{type}', [UserController::class, 'index']);
 
     // GUARDIANS
-    Route::post('guardians/register', [GuardianController::class, 'register']);
     Route::post('guardians/login', [GuardianController::class, 'login']);
+    Route::post('guardians/reset-password', [GuardianController::class, 'resetPassword']);
+    Route::post('guardians/verify-2fa', [GuardianController::class, 'verify2FA']);
     //Route::get('guardians/{id}', [GuardianController::class, 'show']);
 
     Route::middleware('jwt.auth')->group(function () 
     {
+        Route::post('users/register', [UserController::class, 'register']);
         Route::get('users/type/{type}', [UserController::class, 'index']);
         Route::post('users/logout', [UserController::class, 'logout']);
+        Route::post('guardians/register', [GuardianController::class, 'register']);
+        Route::post('guardians/logout', [GuardianController::class, 'logout']);
         Route::get('guardians/{id}', [GuardianController::class, 'show']);
     });
     

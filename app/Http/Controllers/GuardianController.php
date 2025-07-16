@@ -2,10 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\ResetPasswordMail;
+use App\Mail\TwoFactorAuthMail;
 use App\Models\Guardians;
+use App\Models\UserRole;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class GuardianController extends Controller
 {
@@ -32,8 +37,10 @@ class GuardianController extends Controller
                     $msg = 'El teléfono es obligatorio y debe tener máximo 10 dígitos.';
                 } elseif ($errors->has('email')) {
                     $msg = 'El correo es obligatorio, debe ser válido y único.';
-                } elseif ($errors->has('photo')) {
+                } elseif ($errors->has('profilePhoto')) {
                     $msg = 'La foto es obligatoria.';
+                } elseif ($errors->has('password')) {
+                    $msg = 'La contraseña es obligatoria y debe tener mínimo 8 caracteres.';
                 } elseif ($errors->has('password')) {
                     $msg = 'La contraseña es obligatoria y debe tener mínimo 8 caracteres.';
                 } else {
@@ -43,6 +50,36 @@ class GuardianController extends Controller
                     'success' => false,
                     'message' => $msg,
                     'errors' => $errors,
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            $creatorUser = JWTAuth::parseToken()->authenticate();
+        
+            if (!$creatorUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado en el token',
+                    'timestamp' => now(),
+                ], 401);
+            }
+
+            $creatorId = $creatorUser->id;
+
+            $creatorRole = UserRole::where('userId', $creatorId)->first();
+
+            if (!$creatorRole) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El usuario creador no tiene un rol asignado.',
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            if ($creatorRole->roleId != 4) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El rol del usuario creador no es válido.',
                     'timestamp' => now(),
                 ], 400);
             }
@@ -104,10 +141,23 @@ class GuardianController extends Controller
                     ], 403);
                 }
 
+                $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+            
+                $guardians->update(['2facode' => $code]);
+
+                $temporaryToken = base64_encode(json_encode([
+                    'email' => $guardians->email,
+                    'expires_at' => now()->addMinutes(15)->timestamp,
+                    'type' => 'guardian' 
+                ]));
+                
+                Mail::to($guardians->email)->send(new TwoFactorAuthMail($guardians, $code));
+
                 return response()->json([
                     'success' => true,
                     'message' => 'Login successful',
                     'data' => $guardians,
+                    'temporaryToken' => $temporaryToken,
                     'timestamp' => now(),
                 ], 200);
             }
@@ -127,6 +177,148 @@ class GuardianController extends Controller
                 'message' => 'Login failed',
                 'timestamp' => now(),
             ], 400);
+        }
+    }
+
+    public function resetPassword(Request $request)
+    {
+        try
+        {
+            $validator = Validator::make($request->all(), [
+                'email' => 'required|email',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Email is required and must be valid',
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            $guardian = Guardians::where('email', $request->email)->first();
+
+            if (!$guardian) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Guardian not found',
+                    'timestamp' => now(),
+                ], 404);
+            }
+
+            $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
+            $guardian->update(['2facode' => $code]);
+
+            Mail::to($guardian->email)->send(new ResetPasswordMail($guardian, $code));
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Reset password email sent',
+                'timestamp' => now(),
+            ], 200);
+        }
+        catch (\Exception $e)
+        {
+            return response()->json([
+                'success' => false,
+                'message' => 'Server failed',
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+
+    public function verify2fa(Request $request)
+    {
+        try
+        {
+            $validator = Validator::make($request->all(), [
+                'temporaryToken' => 'required|string',
+                'code' => 'required|string|size:6',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed, emporary token and 6-digit code are required',
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            $tokenData = json_decode(base64_decode($request->temporaryToken), true);
+
+            if (!$tokenData || !isset($tokenData['email'], $tokenData['expires_at'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid temporary token',
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            if (now()->timestamp > $tokenData['expires_at']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Temporary token has expired',
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            $guardian = Guardians::where('email', $tokenData['email'])->first();
+
+            if (!$guardian) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Guardian not found',
+                    'timestamp' => now(),
+                ], 404);
+            }
+
+            if ($guardian->{'2facode'} !== $request->code) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid 2FA code',
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            $guardian->update(['2facode' => null]);
+
+            $token = JWTAuth::fromUser($guardian);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Login completed successfully',
+                'data' => $guardian->makeHidden(['password', '2facode', 'created_at']),
+                'token' => $token,
+                'timestamp' => now(),
+            ], 200);
+        }
+        catch (\Exception $e) 
+        {
+            return response()->json([
+                'success' => false,
+                'message' => 'Server failed',
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+
+    public function logout(Request $request)
+    {
+        try {
+            JWTAuth::invalidate(JWTAuth::getToken());
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Successfully logged out',
+                'timestamp' => now(),
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to logout',
+                'timestamp' => now(),
+            ], 500);
         }
     }
 

@@ -41,6 +41,8 @@ class UserController extends Controller
                     $msg = 'La foto es obligatoria.';
                 } elseif ($errors->has('password')) {
                     $msg = 'La contraseña es obligatoria y debe tener mínimo 8 caracteres.';
+                } elseif ($errors->has('password')) {
+                    $msg = 'La contraseña es obligatoria y debe tener mínimo 8 caracteres.';
                 } else {
                     $msg = 'Datos inválidos.';
                 }
@@ -50,6 +52,45 @@ class UserController extends Controller
                     'errors' => $errors,
                     'timestamp' => now(),
                 ], 400);
+            }
+
+            $creatorUser = JWTAuth::parseToken()->authenticate();
+        
+            if (!$creatorUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado en el token',
+                    'timestamp' => now(),
+                ], 401);
+            }
+
+            $creatorId = $creatorUser->id;
+
+            if ($creatorId == 1)
+            {
+                $newUserRoleId = 2;
+            } else {
+                $creatorRole = UserRole::where('userId', $creatorId)->first();
+
+                if (!$creatorRole) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'El usuario creador no tiene un rol asignado.',
+                        'timestamp' => now(),
+                    ], 400);
+                }
+
+                if ($creatorRole->roleId == 2) {
+                    $newUserRoleId = 3; 
+                } elseif ($creatorRole->roleId == 3) {
+                    $newUserRoleId = 4; 
+                } else {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'El rol del usuario creador no es válido.',
+                        'timestamp' => now(),
+                    ], 400);
+                }
             }
 
             $user = User::create([
@@ -62,10 +103,28 @@ class UserController extends Controller
                 'status' => true,
             ]);
 
+            UserRole::create([
+                'userId' => $user->id,
+                'roleId' => $newUserRoleId,
+                'status' => true,
+                'createdBy' => $creatorId,
+            ]);
+    
+            $creatorRole = UserRole::where('userId', $creatorId)->first();
+
             return response()->json([
                 'success' => true,
                 'message' => 'Usuario registrado correctamente',
-                'data' => $user,
+                'data' => [
+                    'createdUser' => $user->makeHidden(['password', '2facode', 'created_at']),
+                    'createdUserRole' => $newUserRoleId,
+                    'createdBy' => [
+                        'id' => $creatorUser->id,
+                        'name' => $creatorUser->firstName . ' ' . $creatorUser->lastName,
+                        'email' => $creatorUser->email,
+                        'role' => $creatorRole ? $creatorRole->roleId : 'Super Admin'
+                    ]
+                ],
                 'timestamp' => now(),
             ], 200);
         }
@@ -210,6 +269,8 @@ class UserController extends Controller
             ], 500);
         }
     }
+
+    // actualizar contraseña
 
     public function verify2fa(Request $request)
     {

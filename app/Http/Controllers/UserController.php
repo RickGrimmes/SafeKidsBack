@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\ResetPasswordMail;
 use App\Mail\TwoFactorAuthMail;
+use App\Models\Role;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
 class UserController extends Controller
@@ -207,19 +208,91 @@ class UserController extends Controller
 
     public function index($type)
     {
-        // Busca los user_ids que tengan ese roleId en user_roles
-        $userIds = UserRole::where('roleId', $type)->pluck('userId');
+        try {
+            $requestingUser = JWTAuth::parseToken()->authenticate();
+            
+            if (!$requestingUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado en el token',
+                    'timestamp' => now(),
+                ], 401);
+            }
 
-        // Obtiene los usuarios con esos IDs y oculta campos sensibles
-        $users = User::whereIn('id', $userIds)
-            ->get()
-            ->makeHidden(['password', '2facode', 'created_at']);
+            $requestingUserRole = UserRole::where('userId', $requestingUser->id)->first();
+            
+            if (!$requestingUserRole) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El usuario no tiene rol asignado',
+                    'timestamp' => now(),
+                ], 403);
+            }
 
-        return response()->json([
-            'success' => true,
-            'data' => $users,
-            'timestamp' => now(),
-        ], 200);
+            // Solo usuarios con roleId 2 (Owner) y 3 (Director) pueden consultar
+            if (!in_array($requestingUserRole->roleId, [2, 3])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No tienes permisos para consultar usuarios',
+                    'timestamp' => now(),
+                ], 403);
+            }
+
+            $role = Role::where('id', $type)->first();
+            
+            if (!$role) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El tipo de rol solicitado no existe',
+                    'timestamp' => now(),
+                ], 404);
+            }
+
+            $userIds = UserRole::where('roleId', $type)->pluck('userId');
+
+            if ($userIds->isEmpty()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'No se encontraron usuarios con el rol especificado',
+                    'data' => [],
+                    'timestamp' => now(),
+                ], 200);
+            }
+
+            $users = User::whereIn('id', $userIds)
+                ->get()
+                ->makeHidden(['password', '2facode', 'created_at']);
+
+            // Enriquecer los datos con información del rol
+            $usersWithRole = $users->map(function ($user) use ($type) {
+                $userRole = UserRole::where('userId', $user->id)->first();
+                return [
+                    'id' => $user->id,
+                    'firstName' => $user->firstName,
+                    'lastName' => $user->lastName,
+                    'email' => $user->email,
+                    'phone' => $user->phone,
+                    'profilePhoto' => $user->profilePhoto,
+                    'status' => $user->status,
+                    'roleId' => $userRole ? $userRole->roleId : null,
+                    'createdBy' => $userRole ? $userRole->createdBy : null,
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Usuarios encontrados exitosamente',
+                'data' => $usersWithRole,
+                'timestamp' => now(),
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al consultar usuarios: ' . $e->getMessage(),
+                'timestamp' => now(),
+            ], 500);
+        }
     }
 
     public function resetPassword(Request $request)

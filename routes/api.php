@@ -22,13 +22,11 @@ Route::prefix('api1')->group(function () {
     Route::post('users/login', [UserController::class, 'login']);
     Route::post('users/reset-password', [UserController::class, 'resetPassword']);
     Route::post('users/verify-2fa', [UserController::class, 'verify2FA']);
-    //Route::get('users/type/{type}', [UserController::class, 'index']);
 
     // GUARDIANS
     Route::post('guardians/login', [GuardianController::class, 'login']);
     Route::post('guardians/reset-password', [GuardianController::class, 'resetPassword']);
     Route::post('guardians/verify-2fa', [GuardianController::class, 'verify2FA']);
-    //Route::get('guardians/{id}', [GuardianController::class, 'show']);
 
     Route::middleware('jwt.auth')->group(function () 
     {
@@ -37,7 +35,8 @@ Route::prefix('api1')->group(function () {
         Route::post('users/logout', [UserController::class, 'logout']);
         Route::post('guardians/register', [GuardianController::class, 'register']);
         Route::post('guardians/logout', [GuardianController::class, 'logout']);
-        Route::get('guardians/{id}', [GuardianController::class, 'show']);
+        Route::get('users/type/{type}', [UserController::class, 'index']);
+        //Route::get('guardians/{id}', [GuardianController::class, 'show']);
     });
     
 });

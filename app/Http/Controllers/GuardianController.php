@@ -6,6 +6,7 @@ use App\Mail\ResetPasswordMail;
 use App\Mail\TwoFactorAuthMail;
 use App\Models\Guardians;
 use App\Models\UserRole;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
@@ -322,24 +323,78 @@ class GuardianController extends Controller
         }
     }
 
-    public function show($id)
+    public function show($id) //jala para la secretaria, pero el guardian no puede ver su otro perfil
     {
-        $guardian = Guardians::find($id);
+        try {
+            // Buscar el guardian que se quiere consultar
+            $guardian = Guardians::findOrFail($id);
 
-        if (!$guardian) {
+            // Obtener el usuario autenticado desde el token JWT
+            $authenticatedUser = JWTAuth::parseToken()->authenticate();
+            
+            if (!$authenticatedUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado en el token',
+                    'timestamp' => now(),
+                ], 401);
+            }
+
+            // Verificar si el usuario autenticado es un User (con roleId)
+            if ($authenticatedUser instanceof \App\Models\User) {
+                // Es un User del sistema, verificar si tiene roleId 4
+                $userRole = UserRole::where('userId', $authenticatedUser->id)->first();
+                
+                if ($userRole && $userRole->roleId == 4) {
+                    // Usuario con roleId 4 (Secretary) puede ver cualquier guardian
+                    $data = $guardian->makeHidden(['2facode', 'password', 'created_at']);
+
+                    return response()->json([
+                        'success' => true,
+                        'message' => 'Guardian found successfully',
+                        'data' => $data,
+                        'accessed_by' => 'Secretary',
+                        'timestamp' => now(),
+                    ], 200);
+                }
+            }
+
+            // Verificar si el usuario autenticado es un Guardian
+            if ($authenticatedUser instanceof \App\Models\Guardians) {
+                // Es un Guardian, verificar si es el mismo que se quiere consultar
+                if ($authenticatedUser->id == $id) {
+                    // El guardian puede ver su propio perfil
+                    $data = $guardian->makeHidden(['2facode', 'password', 'created_at']);
+
+                    return response()->json([
+                        'success' => true,
+                        'message' => 'Guardian found successfully',
+                        'data' => $data,
+                        'accessed_by' => 'Self',
+                        'timestamp' => now(),
+                    ], 200);
+                }
+            }
+
+            // Si no cumple ninguna de las condiciones anteriores, denegar acceso
+            return response()->json([
+                'success' => false,
+                'message' => 'No tienes permisos para ver este guardian',
+                'timestamp' => now(),
+            ], 403);
+
+        } catch (ModelNotFoundException $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Guardian not found',
                 'timestamp' => now(),
             ], 404);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Server failed',
+                'timestamp' => now(),
+            ], 500);
         }
-
-        $data = $guardian->makeHidden(['2facode', 'password', 'created_at']);
-
-        return response()->json([
-            'success' => true,
-            'data' => $data,
-            'timestamp' => now(),
-        ], 200);
     }
 }

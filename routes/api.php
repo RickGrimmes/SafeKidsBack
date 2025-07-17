@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\GuardianController;
+use App\Http\Controllers\SchoolController;
 use App\Http\Controllers\UserController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -30,13 +31,27 @@ Route::prefix('api1')->group(function () {
 
     Route::middleware('jwt.auth')->group(function () 
     {
+        // USERS
         Route::post('users/register', [UserController::class, 'register']);
         Route::get('users/type/{type}', [UserController::class, 'index']);
         Route::post('users/logout', [UserController::class, 'logout']);
+
+        // GUARDIANS
         Route::post('guardians/register', [GuardianController::class, 'register']);
         Route::post('guardians/logout', [GuardianController::class, 'logout']);
-        Route::get('users/type/{type}', [UserController::class, 'index']);
-        //Route::get('guardians/{id}', [GuardianController::class, 'show']);
+        Route::get('guardians/{id}', [GuardianController::class, 'show']);
+        //otro para ver a todos los guardins????
+
+        // AUTHORIZEDPEOPLES
+
+        // SCHOOLS
+        Route::get('schools', [SchoolController::class, 'index']);
+        Route::get('schools/{id}', [SchoolController::class, 'show']);
+        Route::post('schools/create', [SchoolController::class, 'create']);
+        Route::put('schools/edit/{id}', [SchoolController::class, 'edit']);
+        Route::delete('schools/delete/{id}', [SchoolController::class, 'delete']);
+
+        // STUDENTS
     });
     
 });

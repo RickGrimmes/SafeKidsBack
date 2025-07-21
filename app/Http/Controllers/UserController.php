@@ -229,8 +229,23 @@ class UserController extends Controller
                 ], 403);
             }
 
-            // Solo usuarios con roleId 2 (Owner) y 3 (Director) pueden consultar
-            if (!in_array($requestingUserRole->roleId, [2, 3])) {
+            if ($requestingUserRole->roleId == 2) {
+                if ($type != 3) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No puedes ver otro tipo de usuario',
+                        'timestamp' => now(),
+                    ], 403);
+                }
+            } elseif ($requestingUserRole->roleId == 3) {
+                if ($type != 4) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No puedes ver otro tipo de usuario',
+                        'timestamp' => now(),
+                    ], 403);
+                }
+            } else {
                 return response()->json([
                     'success' => false,
                     'message' => 'No tienes permisos para consultar usuarios',
@@ -248,24 +263,36 @@ class UserController extends Controller
                 ], 404);
             }
 
-            $userIds = UserRole::where('roleId', $type)->pluck('userId');
+            $userRoles = UserRole::where('roleId', $type)
+                ->where('createdBy', $requestingUser->id)
+                ->get();
 
-            if ($userIds->isEmpty()) {
+            if ($userRoles->isEmpty()) {
                 return response()->json([
                     'success' => true,
-                    'message' => 'No se encontraron usuarios con el rol especificado',
+                    'message' => 'No has creado usuarios con el rol especificado',
                     'data' => [],
+                    'role_info' => [
+                        'id' => $role->id,
+                        'name' => $role->name ?? "Rol $type"
+                    ],
+                    'requesting_user' => [
+                        'id' => $requestingUser->id,
+                        'name' => $requestingUser->firstName . ' ' . $requestingUser->lastName,
+                        'role' => $requestingUserRole->roleId
+                    ],
                     'timestamp' => now(),
                 ], 200);
             }
+
+            $userIds = $userRoles->pluck('userId');
 
             $users = User::whereIn('id', $userIds)
                 ->get()
                 ->makeHidden(['password', '2facode', 'created_at']);
 
-            // Enriquecer los datos con información del rol
-            $usersWithRole = $users->map(function ($user) use ($type) {
-                $userRole = UserRole::where('userId', $user->id)->first();
+            $usersWithRole = $users->map(function ($user) use ($userRoles) {
+                $userRole = $userRoles->where('userId', $user->id)->first();
                 return [
                     'id' => $user->id,
                     'firstName' => $user->firstName,
@@ -276,13 +303,25 @@ class UserController extends Controller
                     'status' => $user->status,
                     'roleId' => $userRole ? $userRole->roleId : null,
                     'createdBy' => $userRole ? $userRole->createdBy : null,
+                    'userRoleId' => $userRole ? $userRole->id : null,
+                    'userRoleStatus' => $userRole ? $userRole->status : null,
                 ];
             });
 
             return response()->json([
                 'success' => true,
-                'message' => 'Usuarios encontrados exitosamente',
+                'message' => 'Usuarios creados por ti encontrados exitosamente',
                 'data' => $usersWithRole,
+                'total_users' => $users->count(),
+                'role_info' => [
+                    'id' => $role->id,
+                    'name' => $role->name ?? "Rol $type"
+                ],
+                'requesting_user' => [
+                    'id' => $requestingUser->id,
+                    'name' => $requestingUser->firstName . ' ' . $requestingUser->lastName,
+                    'role' => $requestingUserRole->roleId
+                ],
                 'timestamp' => now(),
             ], 200);
 
@@ -343,7 +382,170 @@ class UserController extends Controller
         }
     }
 
-    // actualizar contraseña
+    public function passwordChallenge(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'code' => 'required|string|size:6',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El código de 6 dígitos es obligatorio',
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El código de 6 dígitos es obligatorio',
+                'timestamp' => now(),
+            ], 400);
+        }
+
+        $user = User::where('2facode', $request->code)->first();
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Código inválido o expirado',
+                'timestamp' => now(),
+            ], 400);
+        }
+
+        $temporaryToken = base64_encode(json_encode([
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'purpose' => 'password_reset',
+            'expires_at' => now()->addMinutes(15)->timestamp,
+            'verification_code' => $request->code
+        ]));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Código verificado correctamente',
+            'data' => [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'firstName' => $user->firstName,
+                'lastName' => $user->lastName
+            ],
+            'resetToken' => $temporaryToken,
+            'timestamp' => now(),
+        ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al verificar código: ' . $e->getMessage(),
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+
+    public function changePassword(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'resetToken' => 'required|string',
+                'newPassword' => 'required|string|min:8',
+            ]);
+
+            if ($validator->fails()) {
+                $errors = $validator->errors();
+                if ($errors->has('newPassword')) {
+                    $msg = 'La nueva contraseña es obligatoria y debe tener mínimo 8 caracteres.';
+                } elseif ($errors->has('resetToken')) {
+                    $msg = 'Token de reset es obligatorio.';
+                } else {
+                    $msg = 'Datos inválidos.';
+                }
+                return response()->json([
+                    'success' => false,
+                    'message' => $msg,
+                    'errors' => $errors,
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            // Decodificar y validar el token temporal
+            $tokenData = json_decode(base64_decode($request->resetToken), true);
+
+            if (!$tokenData || !isset($tokenData['user_id'], $tokenData['expires_at'], $tokenData['purpose'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Token de reset inválido',
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            // Verificar que el token sea para reset de contraseña
+            if ($tokenData['purpose'] !== 'password_reset') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Token no válido para cambio de contraseña',
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            // Verificar que el token no haya expirado
+            if (now()->timestamp > $tokenData['expires_at']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Token de reset ha expirado',
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            // Buscar el usuario
+            $user = User::find($tokenData['user_id']);
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado',
+                    'timestamp' => now(),
+                ], 404);
+            }
+
+            // Validar que el código de verificación aún coincida (seguridad extra)
+            if (isset($tokenData['verification_code']) && $user->{'2facode'} !== $tokenData['verification_code']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Token de reset inválido o ya utilizado',
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            // Actualizar la contraseña y limpiar el código 2FA
+            $user->update([
+                'password' => Hash::make($request->newPassword),
+                '2facode' => null // Limpiar el código usado
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Contraseña actualizada exitosamente',
+                'data' => [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                    'firstName' => $user->firstName,
+                    'lastName' => $user->lastName,
+                    'password_changed_at' => now()
+                ],
+                'timestamp' => now(),
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cambiar contraseña: ' . $e->getMessage(),
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
 
     public function verify2fa(Request $request)
     {
@@ -436,6 +638,97 @@ class UserController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to logout',
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+
+    public function myDirectors()
+    {
+        try {
+            $authenticatedUser = JWTAuth::parseToken()->authenticate();
+            
+            if (!$authenticatedUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado en el token',
+                    'timestamp' => now(),
+                ], 401);
+            }
+
+            $userRole = UserRole::where('userId', $authenticatedUser->id)->first();
+            
+            if (!$userRole) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El usuario no tiene rol asignado',
+                    'timestamp' => now(),
+                ], 403);
+            }
+
+            if ($userRole->roleId !== 2) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No tienes permisos para consultar esta información.',
+                    'timestamp' => now(),
+                ], 403);
+            }
+
+            $directorRoles = UserRole::where('roleId', 3)
+                ->where('createdBy', $authenticatedUser->id)
+                ->get();
+
+            if ($directorRoles->isEmpty()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'No has creado ningún director aún',
+                    'data' => [],
+                    'owner_info' => [
+                        'id' => $authenticatedUser->id,
+                        'name' => $authenticatedUser->firstName . ' ' . $authenticatedUser->lastName,
+                        'email' => $authenticatedUser->email
+                    ],
+                    'timestamp' => now(),
+                ], 200);
+            }
+
+            $directorIds = $directorRoles->pluck('userId');
+
+            $directors = User::whereIn('id', $directorIds)
+                ->select('id', 'firstName', 'lastName', 'email')
+                ->get();
+
+            // Formatear la respuesta con información adicional del rol
+            $directorsData = $directors->map(function ($director) use ($directorRoles) {
+                $directorRole = $directorRoles->where('userId', $director->id)->first();
+                return [
+                    'id' => $director->id,
+                    'firstName' => $director->firstName,
+                    'lastName' => $director->lastName,
+                    'email' => $director->email,
+                    'userRoleId' => $directorRole ? $directorRole->id : null,
+                    'status' => $directorRole ? $directorRole->status : null,
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Directores creados por ti encontrados exitosamente',
+                'data' => $directorsData,
+                'total_directors' => $directors->count(),
+                'owner_info' => [
+                    'id' => $authenticatedUser->id,
+                    'name' => $authenticatedUser->firstName . ' ' . $authenticatedUser->lastName,
+                    'email' => $authenticatedUser->email,
+                    'role' => $userRole->roleId
+                ],
+                'timestamp' => now(),
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al consultar directores: ' . $e->getMessage(),
                 'timestamp' => now(),
             ], 500);
         }

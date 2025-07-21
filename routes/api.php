@@ -23,6 +23,8 @@ Route::prefix('api1')->group(function () {
     Route::post('users/login', [UserController::class, 'login']);
     Route::post('users/reset-password', [UserController::class, 'resetPassword']);
     Route::post('users/verify-2fa', [UserController::class, 'verify2FA']);
+    Route::post('users/password-challenge', [UserController::class, 'passwordChallenge']);
+    Route::post('users/change-password', [UserController::class, 'changePassword']);
 
     // GUARDIANS
     Route::post('guardians/login', [GuardianController::class, 'login']);
@@ -35,23 +37,29 @@ Route::prefix('api1')->group(function () {
         Route::post('users/register', [UserController::class, 'register']);
         Route::get('users/type/{type}', [UserController::class, 'index']);
         Route::post('users/logout', [UserController::class, 'logout']);
+        Route::get('users/my-directors', [UserController::class, 'myDirectors']);
 
         // GUARDIANS
         Route::post('guardians/register', [GuardianController::class, 'register']);
         Route::post('guardians/logout', [GuardianController::class, 'logout']);
         Route::get('guardians/{id}', [GuardianController::class, 'show']);
-        //otro para ver a todos los guardins????
 
-        // AUTHORIZEDPEOPLES
+        // AUTHORIZEDPEOPLES SIN RVISAR
+        Route::post('authPeoples', [GuardianController::class, 'create']);
+        Route::get('authPeoples/{id}', [GuardianController::class, 'index']);
+        Route::put('authPeoples/{id}', [GuardianController::class, 'edit']);
+        Route::delete('authPeoples/{id}', [GuardianController::class, 'delete']);
 
-        // SCHOOLS
+        // SCHOOLS SIN REVISAR
         Route::get('schools', [SchoolController::class, 'index']);
         Route::get('schools/{id}', [SchoolController::class, 'show']);
         Route::post('schools/create', [SchoolController::class, 'create']);
         Route::put('schools/edit/{id}', [SchoolController::class, 'edit']);
         Route::delete('schools/delete/{id}', [SchoolController::class, 'delete']);
 
-        // STUDENTS
+        // STUDENTS SIN REVISAR
+        Route::post('students/create', [GuardianController::class, 'createStudent']);
+        Route::get('students', [GuardianController::class, 'indexStudents']);
     });
     
 });

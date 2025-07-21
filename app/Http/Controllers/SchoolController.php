@@ -2,23 +2,405 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Schools;
+use App\Models\SchoolTypes;
+use App\Models\SchoolUsers;
+use App\Models\UserRole;
+use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class SchoolController extends Controller
 {
     public function index()
     {
-        // Logic to list schools
-    }
+        try {
+            $authenticatedUser = JWTAuth::parseToken()->authenticate();
+            
+            if (!$authenticatedUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado en el token',
+                    'timestamp' => now(),
+                ], 401);
+            }
 
+            $userRole = UserRole::where('userId', $authenticatedUser->id)->first();
+            
+            if (!$userRole || !in_array($userRole->roleId, [2])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No tienes permisos para ver las escuelas',
+                    'timestamp' => now(),
+                ], 403);
+            }
+
+            $schools = Schools::with(['schoolTypes', 'schoolUsers'])
+                ->whereHas('schoolUsers', function($query) use ($userRole) {
+                    $query->where('userRoleId', $userRole->id);
+                })
+                ->get();
+
+            if ($schools->isEmpty()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'No has creado ninguna escuela aún',
+                    'data' => [],
+                    'user_info' => [
+                        'user_role_id' => $userRole->id,
+                        'user_id' => $authenticatedUser->id,
+                        'name' => $authenticatedUser->firstName . ' ' . $authenticatedUser->lastName
+                    ],
+                    'timestamp' => now(),
+                ], 200);
+            }
+
+            $schoolsData = $schools->map(function ($school) use ($userRole) {
+                $types = $school->schoolTypes->map(function ($schoolType) {
+                    return [
+                        'id' => $schoolType->id,
+                        'type' => $schoolType->type,
+                        'type_name' => $this->getTypeName($schoolType->type)
+                    ];
+                });
+
+                // Encontrar el registro school_user correspondiente
+                $schoolUser = $school->schoolUsers->where('userRoleId', $userRole->id)->first();
+
+                return [
+                    'id' => $school->id,
+                    'name' => $school->name,
+                    'address' => $school->address,
+                    'phone' => $school->phone,
+                    'city' => $school->city,
+                    'status' => $school->status,
+                    'created_at' => $school->created_at,
+                    'school_types' => $types,
+                    'total_types' => $types->count(),
+                    'ownership_info' => [
+                        'school_user_id' => $schoolUser ? $schoolUser->id : null,
+                        'user_role_id' => $userRole->id,
+                        'is_owner' => true
+                    ]
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Tus escuelas encontradas exitosamente',
+                'data' => $schoolsData,
+                'total_schools' => $schools->count(),
+                'user_info' => [
+                    'user_id' => $authenticatedUser->id,
+                    'user_role_id' => $userRole->id,
+                    'name' => $authenticatedUser->firstName . ' ' . $authenticatedUser->lastName,
+                    'role' => $userRole->roleId
+                ],
+                'timestamp' => now(),
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al consultar tus escuelas: ' . $e->getMessage(),
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+    
     public function show($id)
     {
-        // Logic to show a specific school
+        try {
+            $authenticatedUser = JWTAuth::parseToken()->authenticate();
+            
+            if (!$authenticatedUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado en el token',
+                    'timestamp' => now(),
+                ], 401);
+            }
+
+            $userRole = UserRole::where('userId', $authenticatedUser->id)->first();
+            
+            if (!$userRole || !in_array($userRole->roleId, [2])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No tienes permisos para ver las escuelas',
+                    'timestamp' => now(),
+                ], 403);
+            }
+
+            // Verificar que la escuela existe y pertenece al usuario
+            $school = Schools::with(['schoolTypes', 'schoolUsers'])
+                ->where('id', $id)
+                ->whereHas('schoolUsers', function($query) use ($userRole) {
+                    $query->where('userRoleId', $userRole->id);
+                })
+                ->first();
+
+            if (!$school) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Escuela no encontrada o no tienes permisos para verla',
+                    'timestamp' => now(),
+                ], 404);
+            }
+
+            // Formatear la información exactamente igual que en index
+            $types = $school->schoolTypes->map(function ($schoolType) {
+                return [
+                    'id' => $schoolType->id,
+                    'type' => $schoolType->type,
+                    'type_name' => $this->getTypeName($schoolType->type)
+                ];
+            });
+
+            // Encontrar el registro school_user correspondiente
+            $schoolUser = $school->schoolUsers->where('userRoleId', $userRole->id)->first();
+
+            $schoolData = [
+                'id' => $school->id,
+                'name' => $school->name,
+                'address' => $school->address,
+                'phone' => $school->phone,
+                'city' => $school->city,
+                'status' => $school->status,
+                'created_at' => $school->created_at,
+                'school_types' => $types,
+                'total_types' => $types->count(),
+                'ownership_info' => [
+                    'school_user_id' => $schoolUser ? $schoolUser->id : null,
+                    'user_role_id' => $userRole->id,
+                    'is_owner' => true
+                ]
+            ];
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Escuela encontrada exitosamente',
+                'data' => $schoolData,
+                'user_info' => [
+                    'user_id' => $authenticatedUser->id,
+                    'user_role_id' => $userRole->id,
+                    'name' => $authenticatedUser->firstName . ' ' . $authenticatedUser->lastName,
+                    'role' => $userRole->roleId
+                ],
+                'timestamp' => now(),
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al consultar la escuela: ' . $e->getMessage(),
+                'timestamp' => now(),
+            ], 500);
+        }
     }
 
-    public function create()
+    public function create(Request $request)
     {
-        // Logic to create a new school
+        try {
+            $validator = Validator::make($request->all(), [
+                'name' => 'required|string|max:100',
+                'address' => 'required|string',
+                'phone' => 'required|string|max:10',
+                'city' => 'required|string|max:50',
+                'school_types' => 'required|array|min:1|max:3',
+                'school_types.*' => 'required|integer|in:1,2,3',
+                'director_id' => 'nullable|integer|exists:users,id', // Opcional
+            ]);
+
+            if ($validator->fails()) {
+                $errors = $validator->errors();
+                if ($errors->has('name')) {
+                    $msg = 'El nombre es obligatorio y debe tener máximo 100 caracteres.';
+                } elseif ($errors->has('address')) {
+                    $msg = 'La dirección es obligatoria.';
+                } elseif ($errors->has('phone')) {
+                    $msg = 'El teléfono es obligatorio y debe tener máximo 10 dígitos.';
+                } elseif ($errors->has('city')) {
+                    $msg = 'La ciudad es obligatoria y debe tener máximo 50 caracteres.';
+                } elseif ($errors->has('school_types')) {
+                    $msg = 'Debe seleccionar al menos un tipo de escuela (1, 2 o 3).';
+                } elseif ($errors->has('director_id')) {
+                    $msg = 'El director seleccionado no existe.';
+                } else {
+                    $msg = 'Datos inválidos.';
+                }
+                return response()->json([
+                    'success' => false,
+                    'message' => $msg,
+                    'errors' => $errors,
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            $authenticatedUser = JWTAuth::parseToken()->authenticate();
+            
+            if (!$authenticatedUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado en el token',
+                    'timestamp' => now(),
+                ], 401);
+            }
+
+            $userRole = UserRole::where('userId', $authenticatedUser->id)->first();
+            
+            if (!$userRole || !in_array($userRole->roleId, [2])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No tienes permisos para crear escuelas',
+                    'timestamp' => now(),
+                ], 403);
+            }
+
+            // Validar director si se proporciona
+            $directorRole = null;
+            $directorUser = null;
+            if ($request->director_id) {
+                // Verificar que el director existe y fue creado por este owner
+                $directorRole = UserRole::where('userId', $request->director_id)
+                    ->where('roleId', 3) // Debe ser director
+                    ->where('createdBy', $authenticatedUser->id) // Creado por este owner
+                    ->first();
+                    
+                if (!$directorRole) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'El director seleccionado no existe o no fue creado por ti',
+                        'timestamp' => now(),
+                    ], 400);
+                }
+                
+                $directorUser = User::find($request->director_id);
+            }
+
+            $typeMapping = [
+                1 => 'kindergarten',
+                2 => 'day_care', 
+                3 => 'preschool'
+            ];
+
+            DB::beginTransaction();
+
+            try {
+                // 1. Crear la escuela
+                $school = Schools::create([
+                    'name' => $request->name,
+                    'address' => $request->address,
+                    'phone' => $request->phone,
+                    'city' => $request->city,
+                    'status' => true,
+                ]);
+
+                // 2. Crear los tipos de escuela
+                $schoolTypes = [];
+                foreach ($request->school_types as $typeNumber) {
+                    $schoolType = SchoolTypes::create([
+                        'schoolId' => $school->id,
+                        'type' => $typeMapping[$typeNumber]
+                    ]);
+                    $schoolTypes[] = $schoolType;
+                }
+
+                // 3. Crear el registro en school_users para el OWNER (creador)
+                $ownerSchoolUser = SchoolUsers::create([
+                    'schoolId' => $school->id,
+                    'userRoleId' => $userRole->id
+                ]);
+
+                // 4. Crear el registro en school_users para el DIRECTOR (si se asignó)
+                $directorSchoolUser = null;
+                if ($directorRole) {
+                    $directorSchoolUser = SchoolUsers::create([
+                        'schoolId' => $school->id,
+                        'userRoleId' => $directorRole->id
+                    ]);
+                }
+
+                DB::commit();
+
+                // Preparar respuesta con tipos legibles
+                $typesCreated = array_map(function($type) {
+                    return [
+                        'id' => $type->id,
+                        'type' => $type->type,
+                        'type_name' => $this->getTypeName($type->type)
+                    ];
+                }, $schoolTypes);
+
+                // Preparar información del director asignado
+                $assignedDirector = null;
+                if ($directorUser && $directorRole) {
+                    $assignedDirector = [
+                        'user_id' => $directorUser->id,
+                        'user_role_id' => $directorRole->id,
+                        'name' => $directorUser->firstName . ' ' . $directorUser->lastName,
+                        'email' => $directorUser->email,
+                        'school_user_id' => $directorSchoolUser->id
+                    ];
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Escuela creada exitosamente' . ($assignedDirector ? ' con director asignado' : ''),
+                    'data' => [
+                        'school' => $school,
+                        'school_types' => $typesCreated,
+                        'total_types' => count($schoolTypes),
+                        'created_by' => [
+                            'user_id' => $authenticatedUser->id,
+                            'user_role_id' => $userRole->id,
+                            'name' => $authenticatedUser->firstName . ' ' . $authenticatedUser->lastName,
+                            'role' => $userRole->roleId,
+                            'school_user_id' => $ownerSchoolUser->id
+                        ],
+                        'assigned_director' => $assignedDirector,
+                        'school_users_created' => [
+                            'owner_record' => [
+                                'id' => $ownerSchoolUser->id,
+                                'schoolId' => $ownerSchoolUser->schoolId,
+                                'userRoleId' => $ownerSchoolUser->userRoleId,
+                                'role' => 'owner'
+                            ],
+                            'director_record' => $directorSchoolUser ? [
+                                'id' => $directorSchoolUser->id,
+                                'schoolId' => $directorSchoolUser->schoolId,
+                                'userRoleId' => $directorSchoolUser->userRoleId,
+                                'role' => 'director'
+                            ] : null
+                        ]
+                    ],
+                    'timestamp' => now(),
+                ], 201);
+
+            } catch (\Exception $e) {
+                DB::rollback();
+                throw $e;
+            }
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al crear la escuela: ' . $e->getMessage(),
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+
+    private function getTypeName($type)
+    {
+        $names = [
+            'kindergarten' => 'Jardín de Niños',
+            'day_care' => 'Guardería',
+            'preschool' => 'Preescolar'
+        ];
+        
+        return $names[$type] ?? $type;
     }
 
     public function edit($id)

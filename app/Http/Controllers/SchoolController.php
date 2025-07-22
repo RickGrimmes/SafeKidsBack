@@ -38,6 +38,7 @@ class SchoolController extends Controller
             }
 
             $schools = Schools::with(['schoolTypes', 'schoolUsers'])
+                ->where('status', true)
                 ->whereHas('schoolUsers', function($query) use ($userRole) {
                     $query->where('userRoleId', $userRole->id);
                 })
@@ -133,9 +134,9 @@ class SchoolController extends Controller
                 ], 403);
             }
 
-            // Verificar que la escuela existe y pertenece al usuario
             $school = Schools::with(['schoolTypes', 'schoolUsers'])
                 ->where('id', $id)
+                ->where('status', true)
                 ->whereHas('schoolUsers', function($query) use ($userRole) {
                     $query->where('userRoleId', $userRole->id);
                 })
@@ -149,7 +150,6 @@ class SchoolController extends Controller
                 ], 404);
             }
 
-            // Formatear la información exactamente igual que en index
             $types = $school->schoolTypes->map(function ($schoolType) {
                 return [
                     'id' => $schoolType->id,
@@ -158,7 +158,6 @@ class SchoolController extends Controller
                 ];
             });
 
-            // Encontrar el registro school_user correspondiente
             $schoolUser = $school->schoolUsers->where('userRoleId', $userRole->id)->first();
 
             $schoolData = [
@@ -324,7 +323,6 @@ class SchoolController extends Controller
 
                 DB::commit();
 
-                // Preparar respuesta con tipos legibles
                 $typesCreated = array_map(function($type) {
                     return [
                         'id' => $type->id,
@@ -333,7 +331,6 @@ class SchoolController extends Controller
                     ];
                 }, $schoolTypes);
 
-                // Preparar información del director asignado
                 $assignedDirector = null;
                 if ($directorUser && $directorRole) {
                     $assignedDirector = [
@@ -410,6 +407,108 @@ class SchoolController extends Controller
 
     public function delete($id)
     {
-        // Logic to delete a school
+        try {
+            $authenticatedUser = JWTAuth::parseToken()->authenticate();
+            
+            if (!$authenticatedUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado en el token',
+                    'timestamp' => now(),
+                ], 401);
+            }
+
+            $userRole = UserRole::where('userId', $authenticatedUser->id)->first();
+            
+            if (!$userRole || !in_array($userRole->roleId, [2])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No tienes permisos para eliminar escuelas',
+                    'timestamp' => now(),
+                ], 403);
+            }
+
+            $school = Schools::find($id);
+            
+            if (!$school) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Escuela no encontrada',
+                    'timestamp' => now(),
+                ], 404);
+            }
+
+            $schoolUser = SchoolUsers::where('schoolId', $id)
+                ->where('userRoleId', $userRole->id)
+                ->first();
+
+            if (!$schoolUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No tienes permisos para eliminar esta escuela. Solo puedes eliminar escuelas que tú creaste.',
+                    'timestamp' => now(),
+                ], 403);
+            }
+
+            if (!$school->status) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La escuela ya está inactiva',
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            $school->update([
+                'status' => false,
+            ]);
+
+            $schoolTypes = SchoolTypes::where('schoolId', $id)->get();
+            $types = $schoolTypes->map(function ($schoolType) {
+                return [
+                    'id' => $schoolType->id,
+                    'type' => $schoolType->type,
+                    'type_name' => $this->getTypeName($schoolType->type)
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Escuela eliminada (inactivada) exitosamente',
+                'data' => [
+                    'deleted_school' => [
+                        'id' => $school->id,
+                        'name' => $school->name,
+                        'address' => $school->address,
+                        'phone' => $school->phone,
+                        'city' => $school->city,
+                        'status' => $school->status, // Ahora será false
+                        'created_at' => $school->created_at,
+                        'school_types' => $types,
+                        'total_types' => $types->count(),
+                    ],
+                    'deleted_by' => [
+                        'user_id' => $authenticatedUser->id,
+                        'user_role_id' => $userRole->id,
+                        'name' => $authenticatedUser->firstName . ' ' . $authenticatedUser->lastName,
+                        'role' => $userRole->roleId
+                    ],
+                    'ownership_info' => [
+                        'school_user_id' => $schoolUser->id,
+                        'user_role_id' => $userRole->id,
+                        'was_owner' => true
+                    ]
+                ],
+                'timestamp' => now(),
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al eliminar escuela: ' . $e->getMessage(),
+                'timestamp' => now(),
+            ], 500);
+        }
     }
+
+    // public function revive($id) algo para poder revivir a la escuela eliminada quizá?
 }

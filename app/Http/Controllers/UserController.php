@@ -288,6 +288,7 @@ class UserController extends Controller
             $userIds = $userRoles->pluck('userId');
 
             $users = User::whereIn('id', $userIds)
+                ->where('status', true)
                 ->get()
                 ->makeHidden(['password', '2facode', 'created_at']);
 
@@ -733,4 +734,243 @@ class UserController extends Controller
             ], 500);
         }
     }
+
+    public function myProfile()
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado en el token',
+                    'timestamp' => now(),
+                ], 401);
+            }
+
+            $userRole = UserRole::where('userId', $user->id)->first();
+
+            if (!$userRole) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El usuario no tiene rol asignado',
+                    'timestamp' => now(),
+                ], 403);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Perfil del usuario obtenido exitosamente',
+                'data' => $user->makeHidden(['password', '2facode', 'created_at']),
+                'role_info' => [
+                    'id' => $userRole->roleId,
+                    'name' => $userRole->role->name ?? "Rol {$userRole->roleId}"
+                ],
+                'timestamp' => now(),
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener perfil: ' . $e->getMessage(),
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+
+    public function edit(Request $request, $id)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'email' => 'required|email|unique:users,email,' . $id,
+                'phone' => 'required|string|max:10',
+            ]);
+
+            if ($validator->fails()) {
+                $errors = $validator->errors();
+                if ($errors->has('email')) {
+                    $msg = 'El correo es obligatorio, debe ser válido y único.';
+                } elseif ($errors->has('phone')) {
+                    $msg = 'El teléfono es obligatorio y debe tener máximo 10 dígitos.';
+                } else {
+                    $msg = 'Datos inválidos.';
+                }
+                return response()->json([
+                    'success' => false,
+                    'message' => $msg,
+                    'errors' => $errors,
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            $authenticatedUser = JWTAuth::parseToken()->authenticate();
+            
+            if (!$authenticatedUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado en el token',
+                    'timestamp' => now(),
+                ], 401);
+            }
+
+            $userToEdit = User::find($id);
+            
+            if (!$userToEdit) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado',
+                    'timestamp' => now(),
+                ], 404);
+            }
+
+            $userRoleToEdit = UserRole::where('userId', $id)
+                ->where('createdBy', $authenticatedUser->id)
+                ->first();
+
+            if (!$userRoleToEdit) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No tienes permisos para editar este usuario. Solo puedes editar usuarios que tú creaste.',
+                    'timestamp' => now(),
+                ], 403);
+            }
+
+            $authenticatedUserRole = UserRole::where('userId', $authenticatedUser->id)->first();
+
+            $userToEdit->update([
+                'email' => $request->email,
+                'phone' => $request->phone,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Usuario actualizado exitosamente',
+                'data' => [
+                    'updated_user' => [
+                        'id' => $userToEdit->id,
+                        'firstName' => $userToEdit->firstName,
+                        'lastName' => $userToEdit->lastName,
+                        'email' => $userToEdit->email,
+                        'phone' => $userToEdit->phone,
+                        'profilePhoto' => $userToEdit->profilePhoto,
+                        'status' => $userToEdit->status,
+                    ],
+                    'user_role_info' => [
+                        'id' => $userRoleToEdit->id,
+                        'roleId' => $userRoleToEdit->roleId,
+                        'status' => $userRoleToEdit->status,
+                        'createdBy' => $userRoleToEdit->createdBy
+                    ],
+                    'updated_by' => [
+                        'id' => $authenticatedUser->id,
+                        'name' => $authenticatedUser->firstName . ' ' . $authenticatedUser->lastName,
+                        'email' => $authenticatedUser->email,
+                        'role' => $authenticatedUserRole ? $authenticatedUserRole->roleId : null
+                    ]
+                ],
+                'timestamp' => now(),
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar usuario: ' . $e->getMessage(),
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+
+public function delete($id)
+    {
+        try {
+            $authenticatedUser = JWTAuth::parseToken()->authenticate();
+            
+            if (!$authenticatedUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado en el token',
+                    'timestamp' => now(),
+                ], 401);
+            }
+
+            $userToDelete = User::find($id);
+            
+            if (!$userToDelete) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado',
+                    'timestamp' => now(),
+                ], 404);
+            }
+
+            $userRoleToDelete = UserRole::where('userId', $id)
+                ->where('createdBy', $authenticatedUser->id)
+                ->first();
+
+            if (!$userRoleToDelete) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No tienes permisos para eliminar este usuario. Solo puedes eliminar usuarios que tú creaste.',
+                    'timestamp' => now(),
+                ], 403);
+            }
+
+            if (!$userToDelete->status) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El usuario ya está inactivo',
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            $authenticatedUserRole = UserRole::where('userId', $authenticatedUser->id)->first();
+
+            $userToDelete->update([
+                'status' => false,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Usuario eliminado (inactivado) exitosamente',
+                'data' => [
+                    'deleted_user' => [
+                        'id' => $userToDelete->id,
+                        'firstName' => $userToDelete->firstName,
+                        'lastName' => $userToDelete->lastName,
+                        'email' => $userToDelete->email,
+                        'phone' => $userToDelete->phone,
+                        'profilePhoto' => $userToDelete->profilePhoto,
+                        'status' => $userToDelete->status, // Ahora será false
+                    ],
+                    'user_role_info' => [
+                        'id' => $userRoleToDelete->id,
+                        'roleId' => $userRoleToDelete->roleId,
+                        'status' => $userRoleToDelete->status,
+                        'createdBy' => $userRoleToDelete->createdBy
+                    ],
+                    'deleted_by' => [
+                        'id' => $authenticatedUser->id,
+                        'name' => $authenticatedUser->firstName . ' ' . $authenticatedUser->lastName,
+                        'email' => $authenticatedUser->email,
+                        'role' => $authenticatedUserRole ? $authenticatedUserRole->roleId : null
+                    ],
+                    'deletion_info' => [
+                        'previous_status' => true,
+                        'new_status' => false,
+                        'deleted_at' => now()
+                    ]
+                ],
+                'timestamp' => now(),
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al eliminar usuario: ' . $e->getMessage(),
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+
+    // public function revive($id) algo para poder revivir un usuario eliminado quizá?
 }

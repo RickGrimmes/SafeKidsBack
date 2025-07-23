@@ -158,7 +158,38 @@ class SchoolController extends Controller
                 ];
             });
 
-            $schoolUser = $school->schoolUsers->where('userRoleId', $userRole->id)->first();
+            $currentUserSchoolUser = $school->schoolUsers->where('userRoleId', $userRole->id)->first();
+
+            $additionalInfo = [];
+            
+            if ($userRole->roleId == 2) {
+                $directorSchoolUsers = $school->schoolUsers->where('userRoleId', '!=', $userRole->id);
+                
+                $assignedDirectors = [];
+                foreach ($directorSchoolUsers as $directorSchoolUser) {
+                    $directorRole = UserRole::find($directorSchoolUser->userRoleId);
+                    if ($directorRole && $directorRole->roleId == 3) {
+                        $director = User::find($directorRole->userId);
+                        if ($director && $director->status) {
+                            $assignedDirectors[] = [
+                                'director_id' => $director->id,
+                                'director_role_id' => $directorRole->id,
+                                'name' => $director->firstName . ' ' . $director->lastName,
+                                'email' => $director->email,
+                                'phone' => $director->phone,
+                                'school_user_id' => $directorSchoolUser->id
+                            ];
+                        }
+                    }
+                }
+                
+                $additionalInfo = [
+                    'user_type' => 'owner',
+                    'assigned_directors' => $assignedDirectors,
+                    'total_directors' => count($assignedDirectors)
+                ];
+                
+            } 
 
             $schoolData = [
                 'id' => $school->id,
@@ -170,11 +201,12 @@ class SchoolController extends Controller
                 'created_at' => $school->created_at,
                 'school_types' => $types,
                 'total_types' => $types->count(),
-                'ownership_info' => [
-                    'school_user_id' => $schoolUser ? $schoolUser->id : null,
+                'access_info' => [
+                    'school_user_id' => $currentUserSchoolUser ? $currentUserSchoolUser->id : null,
                     'user_role_id' => $userRole->id,
-                    'is_owner' => true
-                ]
+                    'access_level' => $userRole->roleId,
+                ],
+                'team_info' => $additionalInfo
             ];
 
             return response()->json([
@@ -185,7 +217,7 @@ class SchoolController extends Controller
                     'user_id' => $authenticatedUser->id,
                     'user_role_id' => $userRole->id,
                     'name' => $authenticatedUser->firstName . ' ' . $authenticatedUser->lastName,
-                    'role' => $userRole->roleId
+                    'role' => $userRole->roleId,
                 ],
                 'timestamp' => now(),
             ], 200);

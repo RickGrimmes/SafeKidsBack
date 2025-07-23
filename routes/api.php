@@ -32,6 +32,8 @@ Route::prefix('api1')->group(function () {
     Route::post('guardians/reset-password', [GuardianController::class, 'resetPassword']);
     Route::post('guardians/verify-2fa', [GuardianController::class, 'verify2FA']);
 
+    Route::post('users/refresh-token', [UserController::class, 'refreshToken']);
+
     Route::middleware('jwt.auth')->group(function () 
     {
         // USERS
@@ -52,7 +54,6 @@ Route::prefix('api1')->group(function () {
         //Route::put('guardians/edit/{id}', [GuardianController::class, 'edit']);
         //Route::delete('guardians/delete/{id}', [GuardianController::class, 'delete']);
         
-
         // AUTHORIZEDPEOPLES SIN HACER
         Route::get('authPeoples/{student}', [GuardianController::class, 'authPeopleByStudent']);
         Route::get('authPeoples/{id}', [GuardianController::class, 'show']);

@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\UserRole;
+use App\Models\Schools;
+use App\Models\SchoolUsers;
+use App\Models\SchoolTypes;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
@@ -644,7 +647,7 @@ class UserController extends Controller
         }
     }
 
-    public function myDirectors()
+   public function myDirectors()
     {
         try {
             $authenticatedUser = JWTAuth::parseToken()->authenticate();
@@ -696,32 +699,78 @@ class UserController extends Controller
             $directorIds = $directorRoles->pluck('userId');
 
             $directors = User::whereIn('id', $directorIds)
-                ->select('id', 'firstName', 'lastName', 'email')
+                ->where('status', true) // Solo directores activos
+                ->select('id', 'firstName', 'lastName', 'email', 'phone', 'profilePhoto', 'status')
                 ->get();
 
-            // Formatear la respuesta con información adicional del rol
+            // Formatear la respuesta con información adicional del rol y escuelas
             $directorsData = $directors->map(function ($director) use ($directorRoles) {
                 $directorRole = $directorRoles->where('userId', $director->id)->first();
+                
+                // Buscar las escuelas donde este director está asignado
+                $schoolUsers = SchoolUsers::where('userRoleId', $directorRole->id)->get();
+                
+                $schools = [];
+                if ($schoolUsers->isNotEmpty()) {
+                    $schoolIds = $schoolUsers->pluck('schoolId');
+                    
+                    $schoolsData = Schools::whereIn('id', $schoolIds)
+                        ->where('status', true) // Solo escuelas activas
+                        ->with(['schoolTypes']) // Incluir tipos de escuela
+                        ->get();
+                    
+                    $schools = $schoolsData->map(function ($school) use ($schoolUsers, $directorRole) {
+                        // Encontrar el registro school_user específico
+                        $schoolUser = $schoolUsers->where('schoolId', $school->id)->first();
+                        
+                        // Obtener tipos de escuela con nombres legibles
+                        $types = $school->schoolTypes->map(function ($schoolType) {
+                            return [
+                                'id' => $schoolType->id,
+                                'type' => $schoolType->type,
+                                'type_name' => $this->getSchoolTypeName($schoolType->type)
+                            ];
+                        });
+                        
+                        return [
+                            'school_id' => $school->id,
+                            'school_name' => $school->name,
+                            'school_address' => $school->address,
+                            'school_phone' => $school->phone,
+                            'school_city' => $school->city,
+                            'school_status' => $school->status,
+                            'school_types' => $types,
+                            'total_types' => $types->count(),
+                            'school_user_id' => $schoolUser ? $schoolUser->id : null,
+                            'assigned_at' => $school->created_at
+                        ];
+                    });
+                }
+                
                 return [
-                    'id' => $director->id,
-                    'firstName' => $director->firstName,
-                    'lastName' => $director->lastName,
-                    'email' => $director->email,
-                    'userRoleId' => $directorRole ? $directorRole->id : null,
-                    'status' => $directorRole ? $directorRole->status : null,
+                    'director_info' => [
+                        'id' => $director->id,
+                        'firstName' => $director->firstName,
+                        'lastName' => $director->lastName,
+                        'fullName' => $director->firstName . ' ' . $director->lastName,
+                        'email' => $director->email,
+                        'phone' => $director->phone,
+                        'profilePhoto' => $director->profilePhoto,
+                        'status' => $director->status,
+                    ],
+                    'assigned_schools' => $schools,
                 ];
             });
 
             return response()->json([
                 'success' => true,
-                'message' => 'Directores creados por ti encontrados exitosamente',
+                'message' => 'Directores y sus escuelas asignadas encontrados exitosamente',
                 'data' => $directorsData,
                 'total_directors' => $directors->count(),
-                'owner_info' => [
-                    'id' => $authenticatedUser->id,
-                    'name' => $authenticatedUser->firstName . ' ' . $authenticatedUser->lastName,
-                    'email' => $authenticatedUser->email,
-                    'role' => $userRole->roleId
+                'summary' => [
+                    'directors_with_schools' => $directorsData->where('has_schools', true)->count(),
+                    'directors_without_schools' => $directorsData->where('has_schools', false)->count(),
+                    'total_school_assignments' => $directorsData->sum('total_schools')
                 ],
                 'timestamp' => now(),
             ], 200);
@@ -733,6 +782,18 @@ class UserController extends Controller
                 'timestamp' => now(),
             ], 500);
         }
+    }
+
+    // Método helper para los nombres de tipos de escuela
+    private function getSchoolTypeName($type)
+    {
+        $names = [
+            'kindergarten' => 'Jardín de Niños',
+            'day_care' => 'Guardería',
+            'preschool' => 'Preescolar'
+        ];
+        
+        return $names[$type] ?? $type;
     }
 
     public function myProfile()
@@ -967,6 +1028,54 @@ public function delete($id)
             return response()->json([
                 'success' => false,
                 'message' => 'Error al eliminar usuario: ' . $e->getMessage(),
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+
+    public function refreshToken()
+    {
+        try {
+            $newToken = JWTAuth::refresh(JWTAuth::getToken());
+            
+            $user = JWTAuth::setToken($newToken)->toUser();
+            
+            $userRole = UserRole::where('userId', $user->id)->first();
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Token renovado exitosamente',
+                'data' => [
+                    'token' => $newToken,
+                    'user' => [
+                        'id' => $user->id,
+                        'firstName' => $user->firstName,
+                        'lastName' => $user->lastName,
+                        'role' => $userRole ? $userRole->roleId : null
+                    ]
+                ],
+                'timestamp' => now(),
+            ], 200);
+
+        } catch (\Tymon\JWTAuth\Exceptions\TokenExpiredException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Token expirado y no se puede renovar. Inicia sesión nuevamente.',
+                'error_code' => 'TOKEN_EXPIRED',
+                'timestamp' => now(),
+            ], 401);
+        } catch (\Tymon\JWTAuth\Exceptions\TokenInvalidException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Token inválido',
+                'error_code' => 'TOKEN_INVALID',
+                'timestamp' => now(),
+            ], 401);
+        } catch (\Tymon\JWTAuth\Exceptions\JWTException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo renovar el token',
+                'error_code' => 'TOKEN_REFRESH_FAILED',
                 'timestamp' => now(),
             ], 500);
         }

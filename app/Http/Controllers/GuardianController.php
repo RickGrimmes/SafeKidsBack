@@ -11,6 +11,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
+use Tymon\JWTAuth\Exceptions\JWTException;
+use Tymon\JWTAuth\Exceptions\TokenExpiredException;
+use Tymon\JWTAuth\Exceptions\TokenInvalidException;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
 class GuardianController extends Controller
@@ -323,13 +326,41 @@ class GuardianController extends Controller
         }
     }
 
-    public function show($id) //jala para la secretaria, pero el guardian no puede ver su otro perfil
+    public function myProfile()
     {
         try {
-            // Buscar el guardian que se quiere consultar
+            $guardian = JWTAuth::parseToken()->authenticate();
+
+            if (!$guardian) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Guardian not found',
+                    'timestamp' => now(),
+                ], 404);
+            }
+
+            $data = $guardian->makeHidden(['2facode', 'password', 'created_at']);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Guardian profile retrieved successfully',
+                'data' => $data,
+                'timestamp' => now(),
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Server failed',
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+
+    public function show($id)
+    {
+        try {
             $guardian = Guardians::findOrFail($id);
 
-            // Obtener el usuario autenticado desde el token JWT
             $authenticatedUser = JWTAuth::parseToken()->authenticate();
             
             if (!$authenticatedUser) {
@@ -340,13 +371,10 @@ class GuardianController extends Controller
                 ], 401);
             }
 
-            // Verificar si el usuario autenticado es un User (con roleId)
             if ($authenticatedUser instanceof \App\Models\User) {
-                // Es un User del sistema, verificar si tiene roleId 4
                 $userRole = UserRole::where('userId', $authenticatedUser->id)->first();
                 
                 if ($userRole && $userRole->roleId == 4) {
-                    // Usuario con roleId 4 (Secretary) puede ver cualquier guardian
                     $data = $guardian->makeHidden(['2facode', 'password', 'created_at']);
 
                     return response()->json([
@@ -398,6 +426,11 @@ class GuardianController extends Controller
         }
     }
 
+    public function index()
+    {
+        
+    }
+
     public function refreshToken()
     {
         try {
@@ -424,25 +457,83 @@ class GuardianController extends Controller
                 'timestamp' => now(),
             ], 200);
 
-        } catch (\Tymon\JWTAuth\Exceptions\TokenExpiredException $e) {
+        } catch (TokenExpiredException $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Token expirado y no se puede renovar. Inicia sesión nuevamente.',
                 'error_code' => 'TOKEN_EXPIRED',
                 'timestamp' => now(),
             ], 401);
-        } catch (\Tymon\JWTAuth\Exceptions\TokenInvalidException $e) {
+        } catch (TokenInvalidException $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Token inválido',
                 'error_code' => 'TOKEN_INVALID',
                 'timestamp' => now(),
             ], 401);
-        } catch (\Tymon\JWTAuth\Exceptions\JWTException $e) {
+        } catch (JWTException $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'No se pudo renovar el token',
                 'error_code' => 'TOKEN_REFRESH_FAILED',
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+
+    public function newPassword(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'password' => 'required|string|min:8',
+                'password_confirmation' => 'required|string|min:8',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La nueva contraseña y su confirmación son obligatorias y deben tener mínimo 8 caracteres.',
+                    'errors' => $validator->errors(),
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            if ($request->password !== $request->password_confirmation) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Las contraseñas no coinciden.',
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            $guardian = JWTAuth::parseToken()->authenticate();
+
+            if (!$guardian) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Guardian no encontrado en el token',
+                    'timestamp' => now(),
+                ], 401);
+            }
+
+            $guardian->update([
+                'password' => Hash::make($request->password)
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Contraseña actualizada exitosamente',
+                'data' => [
+                    'guardian_id' => $guardian->id,
+                    'email' => $guardian->email,
+                ],
+                'timestamp' => now(),
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cambiar contraseña: ' . $e->getMessage(),
                 'timestamp' => now(),
             ], 500);
         }

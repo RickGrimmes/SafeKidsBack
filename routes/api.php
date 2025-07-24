@@ -50,10 +50,12 @@ Route::prefix('api1')->group(function () {
         Route::post('guardians/register', [GuardianController::class, 'register']);
         Route::post('guardians/logout', [GuardianController::class, 'logout']);
         Route::get('guardians/{id}', [GuardianController::class, 'show']);
-        //Route::get('guardians', [GuardianController::class, 'index']);
+        Route::get('guardians/my-profile', [GuardianController::class, 'myProfile']);
+        Route::get('guardians/{filter}', [GuardianController::class, 'index']);
         //Route::get('guardians/all/{student}', [GuardianController::class, 'guardiansList']);
         //Route::put('guardians/edit/{id}', [GuardianController::class, 'edit']);
         //Route::delete('guardians/delete/{id}', [GuardianController::class, 'delete']);
+        Route::post('guardians/new-password', [GuardianController::class, 'newPassword']);
         
         // AUTHORIZEDPEOPLES SIN HACER
         Route::get('authPeoples/{student}', [GuardianController::class, 'authPeopleByStudent']);

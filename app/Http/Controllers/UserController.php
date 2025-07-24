@@ -592,7 +592,7 @@ class UserController extends Controller
             if ($validator->fails()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Validation failed, emporary token and 6-digit code are required',
+                    'message' => 'Validation failed, temporary token and 6-digit code are required',
                     'timestamp' => now(),
                 ], 400);
             }
@@ -637,12 +637,41 @@ class UserController extends Controller
 
             $token = JWTAuth::fromUser($user);
 
+            // Obtener el rol del usuario
             $userRole = UserRole::where('userId', $user->id)->first();
+
+            // Obtener la escuela (si tiene asignación en school_users)
+            $schoolUser = $userRole ? SchoolUsers::where('userRoleId', $userRole->id)->first() : null;
+            $school = null;
+            if ($schoolUser) {
+                $schoolModel = Schools::where('id', $schoolUser->schoolId)->where('status', true)->first();
+                if ($schoolModel) {
+                    $schoolTypes = $schoolModel->schoolTypes->map(function ($schoolType) {
+                        return [
+                            'id' => $schoolType->id,
+                            'type' => $schoolType->type,
+                            'type_name' => $this->getSchoolTypeName($schoolType->type)
+                        ];
+                    });
+                    $school = [
+                        'id' => $schoolModel->id,
+                        'name' => $schoolModel->name,
+                        'address' => $schoolModel->address,
+                        'phone' => $schoolModel->phone,
+                        'city' => $schoolModel->city,
+                        'status' => $schoolModel->status,
+                        'school_types' => $schoolTypes,
+                        'total_types' => $schoolTypes->count(),
+                        'school_user_id' => $schoolUser->id
+                    ];
+                }
+            }
 
             return response()->json([
                 'success' => true,
                 'message' => 'Login completed successfully',
                 'data' => $user->makeHidden(['password', '2facode', 'created_at']),
+                'school' => $school,
                 'token' => $token,
                 'timestamp' => now(),
             ], 200);

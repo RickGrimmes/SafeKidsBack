@@ -4,7 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Mail\ResetPasswordMail;
 use App\Mail\TwoFactorAuthMail;
+use App\Models\Groups;
 use App\Models\Guardians;
+use App\Models\GuardiansSchool;
+use App\Models\StudentGuardian;
+use App\Models\Students;
+use App\Models\User;
 use App\Models\UserRole;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
@@ -18,7 +23,7 @@ use Tymon\JWTAuth\Facades\JWTAuth;
 
 class GuardianController extends Controller
 {
-    public function register(Request $request)
+    public function register(Request $request, $schoolId)
     {
         try
         {
@@ -96,6 +101,11 @@ class GuardianController extends Controller
                 'photo' => $request->photo,
                 'password' => Hash::make($request->password),
                 'status' => true,
+            ]);
+
+            GuardiansSchool::create([
+                'guardian_id' => $guardians->id,
+                'school_id' => $schoolId,
             ]);
 
             return response()->json([
@@ -326,36 +336,6 @@ class GuardianController extends Controller
         }
     }
 
-    public function myProfile()
-    {
-        try {
-            $guardian = JWTAuth::parseToken()->authenticate();
-
-            if (!$guardian) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Guardian not found',
-                    'timestamp' => now(),
-                ], 404);
-            }
-
-            $data = $guardian->makeHidden(['2facode', 'password', 'created_at']);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Guardian profile retrieved successfully',
-                'data' => $data,
-                'timestamp' => now(),
-            ], 200);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Server failed',
-                'timestamp' => now(),
-            ], 500);
-        }
-    }
-
     public function show($id)
     {
         try {
@@ -371,7 +351,7 @@ class GuardianController extends Controller
                 ], 401);
             }
 
-            if ($authenticatedUser instanceof \App\Models\User) {
+            if ($authenticatedUser instanceof User) {
                 $userRole = UserRole::where('userId', $authenticatedUser->id)->first();
                 
                 if ($userRole && $userRole->roleId == 4) {
@@ -388,7 +368,7 @@ class GuardianController extends Controller
             }
 
             // Verificar si el usuario autenticado es un Guardian
-            if ($authenticatedUser instanceof \App\Models\Guardians) {
+            if ($authenticatedUser instanceof Guardians) {
                 // Es un Guardian, verificar si es el mismo que se quiere consultar
                 if ($authenticatedUser->id == $id) {
                     // El guardian puede ver su propio perfil
@@ -426,56 +406,195 @@ class GuardianController extends Controller
         }
     }
 
-    public function index()
-    {
-        
-    }
-
-    public function refreshToken()
+    public function myProfile()
     {
         try {
-            $newToken = JWTAuth::refresh(JWTAuth::getToken());
-            
-            $user = JWTAuth::setToken($newToken)->authenticate();
-            
-            $role = null;
-        if ($user instanceof \App\Models\User) {
-            $userRole = UserRole::where('userId', $user->id)->first();
-            $role = $userRole ? $userRole->roleId : null;
-        }
+            $guardian = JWTAuth::parseToken()->authenticate();
+
+            if (!$guardian) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Guardian not found',
+                    'timestamp' => now(),
+                ], 404);
+            }
+
+            $data = $guardian->makeHidden(['2facode', 'password', 'created_at']);
+
             return response()->json([
                 'success' => true,
-                'message' => 'Token renovado exitosamente',
+                'message' => 'Guardian profile retrieved successfully',
+                'data' => $data,
+                'timestamp' => now(),
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Server failed',
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+
+    public function index($schoolId, $studentId = 'ALL')
+    {
+        try {
+            $guardianIds = GuardiansSchool::where('school_id', $schoolId)
+                ->pluck('guardian_id')
+                ->toArray();
+
+            if (strtoupper($studentId) === 'ALL') {
+                $guardians = Guardians::whereIn('id', $guardianIds)
+                    ->where('status', true)
+                    ->get();
+
+                $studentIds = Groups::where('schoolId', $schoolId)
+                    ->pluck('studentId')
+                    ->unique()
+                    ->toArray();
+
+                $students = Students::whereIn('id', $studentIds)
+                    ->where('status', true)
+                    ->get()
+                    ->map(function ($student) {
+                        return $student->firstName . ' ' . $student->lastName;
+                    });
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Guardians y estudiantes de la escuela encontrados exitosamente',
+                    'students' => $students,
+                    'data' => $guardians->makeHidden(['password', '2facode', 'created_at']),
+                    'timestamp' => now(),
+                ], 200);
+            }
+
+            if (is_numeric($studentId)) {
+                $studentGuardianIds = StudentGuardian::where('studentId', $studentId)
+                    ->whereIn('guardianId', $guardianIds)
+                    ->pluck('guardianId')
+                    ->toArray();
+
+                $guardians = Guardians::whereIn('id', $studentGuardianIds)
+                    ->where('status', true)
+                    ->get();
+
+                $student = Students::find($studentId);
+                $studentName = $student ? $student->firstName . ' ' . $student->lastName : null;
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Guardians y estudiante encontrados exitosamente',
+                    'students' => $studentName ? [$studentName] : [],
+                    'data' => $guardians->makeHidden(['password', '2facode', 'created_at']),
+                    'timestamp' => now(),
+                ], 200);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Parámetro studentId inválido',
+                'timestamp' => now(),
+            ], 400);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al consultar tutores: ' . $e->getMessage(),
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+
+    public function edit(Request $request, $id)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'phone' => 'sometimes|required|string|max:10',
+                'email' => 'sometimes|required|email',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Datos inválidos para editar tutor',
+                    'errors' => $validator->errors(),
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            $guardian = Guardians::findOrFail($id);
+
+            if ($request->has('email')) {
+                $emailExists = Guardians::where('email', $request->email)
+                    ->where('id', '!=', $guardian->id)
+                    ->exists();
+
+                if ($emailExists) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'El correo ya está registrado por otro usuario.',
+                        'timestamp' => now(),
+                    ], 400);
+                }
+                $guardian->email = $request->email;
+            }
+
+            if ($request->has('phone')) {
+                $guardian->phone = $request->phone;
+            }
+
+            $guardian->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Tutor actualizado correctamente',
+                'data' => $guardian->makeHidden(['password', '2facode', 'created_at']),
+                'timestamp' => now(),
+            ], 200);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tutor no encontrado',
+                'timestamp' => now(),
+            ], 404);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al editar tutor: ' . $e->getMessage(),
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+
+    public function delete($id)
+    {
+        try {
+            $guardian = Guardians::findOrFail($id);
+
+            $guardian->update(['status' => false]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Tutor dado de baja correctamente',
                 'data' => [
-                    'token' => $newToken,
-                    'user' => [
-                        'id' => $user->id,
-                        'firstName' => $user->firstName,
-                        'lastName' => $user->lastName,
-                    ]
+                    'guardian_id' => $guardian->id,
+                    'status' => $guardian->status,
                 ],
                 'timestamp' => now(),
             ], 200);
 
-        } catch (TokenExpiredException $e) {
+        } catch (ModelNotFoundException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Token expirado y no se puede renovar. Inicia sesión nuevamente.',
-                'error_code' => 'TOKEN_EXPIRED',
+                'message' => 'Tutor no encontrado',
                 'timestamp' => now(),
-            ], 401);
-        } catch (TokenInvalidException $e) {
+            ], 404);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Token inválido',
-                'error_code' => 'TOKEN_INVALID',
-                'timestamp' => now(),
-            ], 401);
-        } catch (JWTException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No se pudo renovar el token',
-                'error_code' => 'TOKEN_REFRESH_FAILED',
+                'message' => 'Error al dar de baja tutor: ' . $e->getMessage(),
                 'timestamp' => now(),
             ], 500);
         }
@@ -534,6 +653,86 @@ class GuardianController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error al cambiar contraseña: ' . $e->getMessage(),
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+
+    public function myGuardians()
+    {
+        try {
+            $guardian = JWTAuth::parseToken()->authenticate();
+
+            if (!$guardian) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Guardian not found',
+                    'timestamp' => now(),
+                ], 404);
+            }
+
+            $guardians = Guardians::where('id', $guardian->id)->get();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Guardians retrieved successfully',
+                'data' => $guardians->makeHidden(['2facode', 'password', 'created_at']),
+                'timestamp' => now(),
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Server failed',
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+    
+    public function refreshToken()
+    {
+        try {
+            $newToken = JWTAuth::refresh(JWTAuth::getToken());
+            
+            $user = JWTAuth::setToken($newToken)->authenticate();
+            
+            $role = null;
+        if ($user instanceof User) {
+            $userRole = UserRole::where('userId', $user->id)->first();
+            $role = $userRole ? $userRole->roleId : null;
+        }
+            return response()->json([
+                'success' => true,
+                'message' => 'Token renovado exitosamente',
+                'data' => [
+                    'token' => $newToken,
+                    'user' => [
+                        'id' => $user->id,
+                        'firstName' => $user->firstName,
+                        'lastName' => $user->lastName,
+                    ]
+                ],
+                'timestamp' => now(),
+            ], 200);
+
+        } catch (TokenExpiredException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Token expirado y no se puede renovar. Inicia sesión nuevamente.',
+                'error_code' => 'TOKEN_EXPIRED',
+                'timestamp' => now(),
+            ], 401);
+        } catch (TokenInvalidException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Token inválido',
+                'error_code' => 'TOKEN_INVALID',
+                'timestamp' => now(),
+            ], 401);
+        } catch (JWTException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo renovar el token',
+                'error_code' => 'TOKEN_REFRESH_FAILED',
                 'timestamp' => now(),
             ], 500);
         }

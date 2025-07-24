@@ -555,7 +555,7 @@ class UserController extends Controller
             // Actualizar la contraseña y limpiar el código 2FA
             $user->update([
                 'password' => Hash::make($request->password),
-                '2facode' => null // Limpiar el código usado
+                '2facode' => null 
             ]);
 
             return response()->json([
@@ -810,7 +810,7 @@ class UserController extends Controller
             $directorIds = $directorRoles->pluck('userId');
 
             $directors = User::whereIn('id', $directorIds)
-                ->where('status', true) // Solo directores activos
+                ->where('status', true) 
                 ->select('id', 'firstName', 'lastName', 'email', 'phone', 'profilePhoto', 'status')
                 ->get();
 
@@ -826,8 +826,8 @@ class UserController extends Controller
                     $schoolIds = $schoolUsers->pluck('schoolId');
                     
                     $schoolsData = Schools::whereIn('id', $schoolIds)
-                        ->where('status', true) // Solo escuelas activas
-                        ->with(['schoolTypes']) // Incluir tipos de escuela
+                        ->where('status', true) 
+                        ->with(['schoolTypes'])
                         ->get();
                     
                     $schools = $schoolsData->map(function ($school) use ($schoolUsers, $directorRole) {
@@ -1111,7 +1111,7 @@ class UserController extends Controller
                         'email' => $userToDelete->email,
                         'phone' => $userToDelete->phone,
                         'profilePhoto' => $userToDelete->profilePhoto,
-                        'status' => $userToDelete->status, // Ahora será false
+                        'status' => $userToDelete->status, 
                     ],
                     'user_role_info' => [
                         'id' => $userRoleToDelete->id,

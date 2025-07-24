@@ -49,6 +49,11 @@ class Guardians extends Authenticatable implements JWTSubject
         'created_at' => 'datetime',
     ];
 
+    public function schools()
+    {
+        return $this->belongsToMany(Schools::class, 'guardians_schools', 'guardian_id', 'school_id');
+    }
+
     public function getJWTIdentifier()
     {
         return $this->getKey();

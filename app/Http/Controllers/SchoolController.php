@@ -644,7 +644,7 @@ class SchoolController extends Controller
                         'address' => $school->address,
                         'phone' => $school->phone,
                         'city' => $school->city,
-                        'status' => $school->status, // Ahora será false
+                        'status' => $school->status,
                         'created_at' => $school->created_at,
                         'school_types' => $types,
                         'total_types' => $types->count(),

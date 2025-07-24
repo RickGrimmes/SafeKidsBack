@@ -49,4 +49,9 @@ class Schools extends Model
     {
         return $this->hasMany(SchoolTypes::class, 'schoolId');
     }
+
+    public function guardians()
+    {
+        return $this->belongsToMany(Guardians::class, 'guardians_schools', 'school_id', 'guardian_id');
+    }
 }

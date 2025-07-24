@@ -38,4 +38,9 @@ class Students extends Model
         'status' => 'boolean',
         'created_at' => 'datetime',
     ];
+
+    public function groups()
+    {
+        return $this->hasMany(\App\Models\Groups::class, 'studentId');
+    }
 }

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\GroupController;
 use App\Http\Controllers\GuardianController;
 use App\Http\Controllers\SchoolController;
 use App\Http\Controllers\StudentController;
@@ -47,23 +48,16 @@ Route::prefix('api1')->group(function () {
         Route::post('users/new-password', [UserController::class, 'newPassword']);
 
         // GUARDIANS
-        Route::post('guardians/register', [GuardianController::class, 'register']);
+        Route::post('guardians/register/{schoolId}', [GuardianController::class, 'register']);
         Route::post('guardians/logout', [GuardianController::class, 'logout']);
         Route::get('guardians/{id}', [GuardianController::class, 'show']);
         Route::get('guardians/my-profile', [GuardianController::class, 'myProfile']);
-        Route::get('guardians/{filter}', [GuardianController::class, 'index']);
-        //Route::get('guardians/all/{student}', [GuardianController::class, 'guardiansList']);
-        //Route::put('guardians/edit/{id}', [GuardianController::class, 'edit']);
-        //Route::delete('guardians/delete/{id}', [GuardianController::class, 'delete']);
+        Route::get('guardians/{schoolId}/{studentId}', [GuardianController::class, 'index']);
+        //Route::get('guardians/all/{student}', [GuardianController::class, 'guardiansList']); ESTO PARA QUÉ ERA?
+        Route::put('guardians/edit/{id}', [GuardianController::class, 'edit']);
+        Route::delete('guardians/delete/{id}', [GuardianController::class, 'delete']);
         Route::post('guardians/new-password', [GuardianController::class, 'newPassword']);
-        
-        // AUTHORIZEDPEOPLES SIN HACER
-        Route::get('authPeoples/{student}', [GuardianController::class, 'authPeopleByStudent']);
-        Route::get('authPeoples/{id}', [GuardianController::class, 'show']);
-        Route::post('authPeoples', [GuardianController::class, 'create']);
-        Route::get('authPeoples/{id}', [GuardianController::class, 'index']);
-        Route::put('authPeoples/{id}', [GuardianController::class, 'edit']);
-        Route::delete('authPeoples/{id}', [GuardianController::class, 'delete']);
+        Route::get('guardians/my-guardians', [GuardianController::class, 'myGuardians']);
 
         // SCHOOLS
         Route::get('schools', [SchoolController::class, 'index']);
@@ -72,14 +66,25 @@ Route::prefix('api1')->group(function () {
         Route::put('schools/edit/{id}', [SchoolController::class, 'edit']);
         Route::delete('schools/delete/{id}', [SchoolController::class, 'delete']);
 
-        // STUDENTS SIN HACER
-        Route::post('students/create', [StudentController::class, 'create']);
-        Route::get('students/{filter}', [StudentController::class, 'index']);
-        Route::put('students/editGroup/{id}', [StudentController::class, 'editGroup']);
+        // STUDENTS
+        Route::post('students/create/{schoolId}', [StudentController::class, 'create']);
         Route::get('students/{id}', [StudentController::class, 'show']);
+        Route::get('students/seek-school/{schoolId}/{filter}', [StudentController::class, 'index']);
+        Route::put('students/edit-group/{studentId}', [StudentController::class, 'editGroup']);
         Route::delete('students/delete/{id}', [StudentController::class, 'delete']);
 
-        // TODO LO DE LA CÁMARA
+        //GROUPS
+        Route::get('groups/{schoolId}', [GroupController::class, 'index']);
+
+        // AUTHORIZEDPEOPLES SIN HACER
+        Route::get('authPeoples/{student}', [GuardianController::class, 'authPeopleByStudent']);
+        Route::get('authPeoples/{id}', [GuardianController::class, 'show']);
+        Route::post('authPeoples', [GuardianController::class, 'create']);
+        Route::get('authPeoples/{id}', [GuardianController::class, 'index']);
+        Route::put('authPeoples/{id}', [GuardianController::class, 'edit']);
+        Route::delete('authPeoples/{id}', [GuardianController::class, 'delete']);
+
+        // TODO LO DE LA CÁMARA SKRAAAAAAAAA
     });
     
 });

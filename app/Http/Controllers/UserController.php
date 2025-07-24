@@ -953,8 +953,30 @@ class UserController extends Controller
     public function edit(Request $request, $id)
     {
         try {
-            $authenticatedUser = JWTAuth::parseToken()->authenticate();
+            $validator = Validator::make($request->all(), [
+                'email' => 'required|email|unique:users,email,' . $id,
+                'phone' => 'required|string|max:10',
+            ]);
 
+            if ($validator->fails()) {
+                $errors = $validator->errors();
+                if ($errors->has('email')) {
+                    $msg = 'El correo es obligatorio, debe ser válido y único.';
+                } elseif ($errors->has('phone')) {
+                    $msg = 'El teléfono es obligatorio y debe tener máximo 10 dígitos.';
+                } else {
+                    $msg = 'Datos inválidos.';
+                }
+                return response()->json([
+                    'success' => false,
+                    'message' => $msg,
+                    'errors' => $errors,
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            $authenticatedUser = JWTAuth::parseToken()->authenticate();
+            
             if (!$authenticatedUser) {
                 return response()->json([
                     'success' => false,
@@ -963,151 +985,67 @@ class UserController extends Controller
                 ], 401);
             }
 
-            $userRole = UserRole::where('userId', $authenticatedUser->id)->first();
-
-            if (!$userRole || $userRole->roleId != 2) {
+            $userToEdit = User::find($id);
+            
+            if (!$userToEdit) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'No tienes permisos para editar escuelas',
-                    'timestamp' => now(),
-                ], 403);
-            }
-
-            $school = Schools::find($id);
-
-            if (!$school || !$school->status) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Escuela no encontrada o está inactiva',
+                    'message' => 'Usuario no encontrado',
                     'timestamp' => now(),
                 ], 404);
             }
 
-            $schoolUser = SchoolUsers::where('schoolId', $id)
-                ->where('userRoleId', $userRole->id)
+            $userRoleToEdit = UserRole::where('userId', $id)
+                ->where('createdBy', $authenticatedUser->id)
                 ->first();
 
-            if (!$schoolUser) {
+            if (!$userRoleToEdit) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'No tienes permisos para editar esta escuela. Solo puedes editar escuelas que tú creaste.',
+                    'message' => 'No tienes permisos para editar este usuario. Solo puedes editar usuarios que tú creaste.',
                     'timestamp' => now(),
                 ], 403);
             }
 
-            $validator = Validator::make($request->all(), [
-                'name' => 'sometimes|string|max:100',
-                'address' => 'sometimes|string',
-                'phone' => 'sometimes|string|max:10',
-                'city' => 'sometimes|string|max:50',
-                'school_types' => 'sometimes|array|min:1|max:3',
-                'school_types.*' => 'required_with:school_types|integer|in:1,2,3',
-                'director_id' => 'nullable|integer|exists:users,id', 
+            $authenticatedUserRole = UserRole::where('userId', $authenticatedUser->id)->first();
+
+            $userToEdit->update([
+                'email' => $request->email,
+                'phone' => $request->phone,
             ]);
 
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Datos inválidos para editar la escuela',
-                    'errors' => $validator->errors(),
-                    'timestamp' => now(),
-                ], 400);
-            }
-
-            DB::beginTransaction();
-
-            try {
-                // Actualizar los campos permitidos
-                $school->update($validator->validated());
-
-                // Si school_types viene en el request, actualiza los tipos
-                if ($request->has('school_types')) {
-                    $typeMapping = [
-                        1 => 'kindergarten',
-                        2 => 'day_care',
-                        3 => 'preschool'
-                    ];
-
-                    // Eliminar los tipos anteriores
-                    SchoolTypes::where('schoolId', $school->id)->delete();
-
-                    // Crear los nuevos tipos
-                    foreach ($request->school_types as $typeNumber) {
-                        SchoolTypes::create([
-                            'schoolId' => $school->id,
-                            'type' => $typeMapping[$typeNumber]
-                        ]);
-                    }
-                }
-
-                // Si director_id viene en el request, actualiza el director asignado
-                if ($request->has('director_id')) {
-                    // Validar que el director existe y fue creado por este owner
-                    $directorRole = UserRole::where('userId', $request->director_id)
-                        ->where('roleId', 3)
-                        ->where('createdBy', $authenticatedUser->id)
-                        ->first();
-
-                    if (!$directorRole) {
-                        DB::rollback();
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'El director seleccionado no existe o no fue creado por ti',
-                            'timestamp' => now(),
-                        ], 400);
-                    }
-
-                    SchoolUsers::where('schoolId', $school->id)
-                        ->whereHas('userRole', function($q) {
-                            $q->where('roleId', 3);
-                        })->delete();
-
-                    SchoolUsers::create([
-                        'schoolId' => $school->id,
-                        'userRoleId' => $directorRole->id
-                    ]);
-                }
-
-                DB::commit();
-
-                $types = SchoolTypes::where('schoolId', $school->id)->get()->map(function ($schoolType) {
-                    return [
-                        'id' => $schoolType->id,
-                        'type' => $schoolType->type,
-                        'type_name' => $this->getTypeName($schoolType->type)
-                    ];
-                });
-
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Escuela editada exitosamente',
-                    'data' => [
-                        'school' => $school,
-                        'school_types' => $types,
-                        'total_types' => $types->count(),
-                        'edited_by' => [
-                            'user_id' => $authenticatedUser->id,
-                            'user_role_id' => $userRole->id,
-                            'name' => $authenticatedUser->firstName . ' ' . $authenticatedUser->lastName,
-                            'role' => $userRole->roleId
-                        ]
+            return response()->json([
+                'success' => true,
+                'message' => 'Usuario actualizado exitosamente',
+                'data' => [
+                    'updated_user' => [
+                        'id' => $userToEdit->id,
+                        'firstName' => $userToEdit->firstName,
+                        'lastName' => $userToEdit->lastName,
+                        'email' => $userToEdit->email,
+                        'phone' => $userToEdit->phone,
+                        'profilePhoto' => $userToEdit->profilePhoto,
+                        'status' => $userToEdit->status,
                     ],
-                    'timestamp' => now(),
-                ], 200);
-
-            } catch (\Exception $e) {
-                DB::rollback();
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Error al editar la escuela: ' . $e->getMessage(),
-                    'timestamp' => now(),
-                ], 500);
-            }
-
+                    'user_role_info' => [
+                        'id' => $userRoleToEdit->id,
+                        'roleId' => $userRoleToEdit->roleId,
+                        'status' => $userRoleToEdit->status,
+                        'createdBy' => $userRoleToEdit->createdBy
+                    ],
+                    'updated_by' => [
+                        'id' => $authenticatedUser->id,
+                        'name' => $authenticatedUser->firstName . ' ' . $authenticatedUser->lastName,
+                        'email' => $authenticatedUser->email,
+                        'role' => $authenticatedUserRole ? $authenticatedUserRole->roleId : null
+                    ]
+                ],
+                'timestamp' => now(),
+            ], 200);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error al editar la escuela: ' . $e->getMessage(),
+                'message' => 'Error al actualizar usuario: ' . $e->getMessage(),
                 'timestamp' => now(),
             ], 500);
         }

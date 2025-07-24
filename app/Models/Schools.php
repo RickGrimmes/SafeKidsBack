@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\SchoolUsers;
+use App\Models\SchoolTypes;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -37,4 +39,14 @@ class Schools extends Model
         'status' => 'boolean',
         'created_at' => 'datetime',
     ];
+
+    public function schoolUsers()
+    {
+        return $this->hasMany(SchoolUsers::class, 'schoolId');
+    }
+
+    public function schoolTypes()
+    {
+        return $this->hasMany(SchoolTypes::class, 'schoolId');
+    }
 }

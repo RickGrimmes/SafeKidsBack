@@ -432,9 +432,140 @@ class SchoolController extends Controller
         return $names[$type] ?? $type;
     }
 
-    public function edit($id)
+    public function edit(Request $request, $id)
     {
-        // Logic to edit an existing school
+        try {
+            $authenticatedUser = JWTAuth::parseToken()->authenticate();
+
+            if (!$authenticatedUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado en el token',
+                    'timestamp' => now(),
+                ], 401);
+            }
+
+            $userRole = UserRole::where('userId', $authenticatedUser->id)->first();
+
+            if (!$userRole || $userRole->roleId != 2) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No tienes permisos para editar escuelas',
+                    'timestamp' => now(),
+                ], 403);
+            }
+
+            $school = Schools::find($id);
+
+            if (!$school || !$school->status) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Escuela no encontrada o está inactiva',
+                    'timestamp' => now(),
+                ], 404);
+            }
+
+            $schoolUser = SchoolUsers::where('schoolId', $id)
+                ->where('userRoleId', $userRole->id)
+                ->first();
+
+            if (!$schoolUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No tienes permisos para editar esta escuela. Solo puedes editar escuelas que tú creaste.',
+                    'timestamp' => now(),
+                ], 403);
+            }
+
+            // Validar los datos a editar
+            $validator = Validator::make($request->all(), [
+                'name' => 'sometimes|string|max:100',
+                'address' => 'sometimes|string',
+                'phone' => 'sometimes|string|max:10',
+                'city' => 'sometimes|string|max:50',
+                'school_types' => 'sometimes|array|min:1|max:3',
+                'school_types.*' => 'required_with:school_types|integer|in:1,2,3',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Datos inválidos para editar la escuela',
+                    'errors' => $validator->errors(),
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            DB::beginTransaction();
+
+            try {
+                // Actualizar los campos permitidos
+                $school->update($validator->validated());
+
+                // Si school_types viene en el request, actualiza los tipos
+                if ($request->has('school_types')) {
+                    $typeMapping = [
+                        1 => 'kindergarten',
+                        2 => 'day_care',
+                        3 => 'preschool'
+                    ];
+
+                    // Eliminar los tipos anteriores
+                    SchoolTypes::where('schoolId', $school->id)->delete();
+
+                    // Crear los nuevos tipos
+                    foreach ($request->school_types as $typeNumber) {
+                        SchoolTypes::create([
+                            'schoolId' => $school->id,
+                            'type' => $typeMapping[$typeNumber]
+                        ]);
+                    }
+                }
+
+                DB::commit();
+
+                // Obtener los tipos actualizados para la respuesta
+                $types = SchoolTypes::where('schoolId', $school->id)->get()->map(function ($schoolType) {
+                    return [
+                        'id' => $schoolType->id,
+                        'type' => $schoolType->type,
+                        'type_name' => $this->getTypeName($schoolType->type)
+                    ];
+                });
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Escuela editada exitosamente',
+                    'data' => [
+                        'school' => $school,
+                        'school_types' => $types,
+                        'total_types' => $types->count(),
+                        'edited_by' => [
+                            'user_id' => $authenticatedUser->id,
+                            'user_role_id' => $userRole->id,
+                            'name' => $authenticatedUser->firstName . ' ' . $authenticatedUser->lastName,
+                            'role' => $userRole->roleId
+                        ]
+                    ],
+                    'timestamp' => now(),
+                ], 200);
+
+            } catch (\Exception $e) {
+                DB::rollback();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error al editar la escuela: ' . $e->getMessage(),
+                    'timestamp' => now(),
+                ], 500);
+            }
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al editar la escuela: ' . $e->getMessage(),
+                'timestamp' => now(),
+            ], 500);
+        }
     }
 
     public function delete($id)

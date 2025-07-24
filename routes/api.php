@@ -26,24 +26,25 @@ Route::prefix('api1')->group(function () {
     Route::post('users/verify-2fa', [UserController::class, 'verify2FA']);
     Route::post('users/password-challenge', [UserController::class, 'passwordChallenge']);
     Route::post('users/change-password', [UserController::class, 'changePassword']);
+    Route::post('users/refresh-token', [UserController::class, 'refreshToken']);
 
     // GUARDIANS
     Route::post('guardians/login', [GuardianController::class, 'login']);
     Route::post('guardians/reset-password', [GuardianController::class, 'resetPassword']);
     Route::post('guardians/verify-2fa', [GuardianController::class, 'verify2FA']);
-
-    Route::post('users/refresh-token', [UserController::class, 'refreshToken']);
+    Route::post('guardians/refresh-token', [GuardianController::class, 'refreshToken']);
 
     Route::middleware('jwt.auth')->group(function () 
     {
         // USERS
         Route::post('users/register', [UserController::class, 'register']);
-        Route::get('users/type/{type}', [UserController::class, 'index']);
+        Route::get('users/type/{type}', [UserController::class, 'index']); 
         Route::post('users/logout', [UserController::class, 'logout']);
         Route::get('users/my-directors', [UserController::class, 'myDirectors']);
         Route::get('users/my-profile', [UserController::class, 'myProfile']);
         Route::put('users/edit/{id}', [UserController::class, 'edit']);
         Route::delete('users/delete/{id}', [UserController::class, 'delete']);
+        Route::post('users/new-password', [UserController::class, 'newPassword']);
 
         // GUARDIANS
         Route::post('guardians/register', [GuardianController::class, 'register']);
@@ -66,7 +67,7 @@ Route::prefix('api1')->group(function () {
         Route::get('schools', [SchoolController::class, 'index']);
         Route::get('schools/{id}', [SchoolController::class, 'show']);
         Route::post('schools/create', [SchoolController::class, 'create']);
-        //Route::put('schools/edit/{id}', [SchoolController::class, 'edit']);
+        Route::put('schools/edit/{id}', [SchoolController::class, 'edit']);
         Route::delete('schools/delete/{id}', [SchoolController::class, 'delete']);
 
         // STUDENTS SIN HACER

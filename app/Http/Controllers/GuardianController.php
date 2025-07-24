@@ -397,4 +397,54 @@ class GuardianController extends Controller
             ], 500);
         }
     }
+
+    public function refreshToken()
+    {
+        try {
+            $newToken = JWTAuth::refresh(JWTAuth::getToken());
+            
+            $user = JWTAuth::setToken($newToken)->authenticate();
+            
+            $role = null;
+        if ($user instanceof \App\Models\User) {
+            $userRole = UserRole::where('userId', $user->id)->first();
+            $role = $userRole ? $userRole->roleId : null;
+        }
+            return response()->json([
+                'success' => true,
+                'message' => 'Token renovado exitosamente',
+                'data' => [
+                    'token' => $newToken,
+                    'user' => [
+                        'id' => $user->id,
+                        'firstName' => $user->firstName,
+                        'lastName' => $user->lastName,
+                    ]
+                ],
+                'timestamp' => now(),
+            ], 200);
+
+        } catch (\Tymon\JWTAuth\Exceptions\TokenExpiredException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Token expirado y no se puede renovar. Inicia sesión nuevamente.',
+                'error_code' => 'TOKEN_EXPIRED',
+                'timestamp' => now(),
+            ], 401);
+        } catch (\Tymon\JWTAuth\Exceptions\TokenInvalidException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Token inválido',
+                'error_code' => 'TOKEN_INVALID',
+                'timestamp' => now(),
+            ], 401);
+        } catch (\Tymon\JWTAuth\Exceptions\JWTException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo renovar el token',
+                'error_code' => 'TOKEN_REFRESH_FAILED',
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
 }

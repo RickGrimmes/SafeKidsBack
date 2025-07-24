@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Mail;
 use App\Mail\ResetPasswordMail;
 use App\Mail\TwoFactorAuthMail;
 use App\Models\Role;
+use Illuminate\Support\Facades\DB;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
 class UserController extends Controller
@@ -297,6 +298,33 @@ class UserController extends Controller
 
             $usersWithRole = $users->map(function ($user) use ($userRoles) {
                 $userRole = $userRoles->where('userId', $user->id)->first();
+
+                $schoolUser = SchoolUsers::where('userRoleId', $userRole->id)->first();
+                $school = null;
+                if ($schoolUser) {
+                    $schoolModel = Schools::where('id', $schoolUser->schoolId)->where('status', true)->first();
+                    if ($schoolModel) {
+                        $schoolTypes = $schoolModel->schoolTypes->map(function ($schoolType) {
+                            return [
+                                'id' => $schoolType->id,
+                                'type' => $schoolType->type,
+                                'type_name' => $this->getSchoolTypeName($schoolType->type)
+                            ];
+                        });
+                        $school = [
+                            'id' => $schoolModel->id,
+                            'name' => $schoolModel->name,
+                            'address' => $schoolModel->address,
+                            'phone' => $schoolModel->phone,
+                            'city' => $schoolModel->city,
+                            'status' => $schoolModel->status,
+                            'school_types' => $schoolTypes,
+                            'total_types' => $schoolTypes->count(),
+                            'school_user_id' => $schoolUser->id
+                        ];
+                    }
+                }
+
                 return [
                     'id' => $user->id,
                     'firstName' => $user->firstName,
@@ -309,6 +337,7 @@ class UserController extends Controller
                     'createdBy' => $userRole ? $userRole->createdBy : null,
                     'userRoleId' => $userRole ? $userRole->id : null,
                     'userRoleStatus' => $userRole ? $userRole->status : null,
+                    'school' => $school
                 ];
             });
 
@@ -454,12 +483,12 @@ class UserController extends Controller
         try {
             $validator = Validator::make($request->all(), [
                 'resetToken' => 'required|string',
-                'newPassword' => 'required|string|min:8',
+                'password' => 'required|string|min:8',
             ]);
 
             if ($validator->fails()) {
                 $errors = $validator->errors();
-                if ($errors->has('newPassword')) {
+                if ($errors->has('password')) {
                     $msg = 'La nueva contraseña es obligatoria y debe tener mínimo 8 caracteres.';
                 } elseif ($errors->has('resetToken')) {
                     $msg = 'Token de reset es obligatorio.';
@@ -525,7 +554,7 @@ class UserController extends Controller
 
             // Actualizar la contraseña y limpiar el código 2FA
             $user->update([
-                'password' => Hash::make($request->newPassword),
+                'password' => Hash::make($request->password),
                 '2facode' => null // Limpiar el código usado
             ]);
 
@@ -620,6 +649,59 @@ class UserController extends Controller
         }
         catch (\Exception $e) 
         {
+            return response()->json([
+                'success' => false,
+                'message' => 'Server failed',
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+
+    public function resend2fa(Request $request) 
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'temporaryToken' => 'required|string',
+            ]);
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Temporary token is required',
+                    'timestamp' => now(),
+                ], 400);
+            }
+            $tokenData = json_decode(base64_decode($request->temporaryToken), true);
+            if (!$tokenData || !isset($tokenData['email'], $tokenData['expires_at'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid temporary token',
+                    'timestamp' => now(),
+                ], 400);
+            }
+            if (now()->timestamp > $tokenData['expires_at']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Temporary token has expired',
+                    'timestamp' => now(),
+                ], 400);
+            }
+            $user = User::where('email', $tokenData['email'])->first();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found',
+                    'timestamp' => now(),
+                ], 404);
+            }
+            $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+            $user->update(['2facode' => $code]);
+            Mail::to($user->email)->send(new TwoFactorAuthMail($user, $code));
+            return response()->json([
+                'success' => true,
+                'message' => '2FA code resent successfully',
+                'timestamp' => now(),
+            ], 200);
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Server failed',
@@ -842,30 +924,8 @@ class UserController extends Controller
     public function edit(Request $request, $id)
     {
         try {
-            $validator = Validator::make($request->all(), [
-                'email' => 'required|email|unique:users,email,' . $id,
-                'phone' => 'required|string|max:10',
-            ]);
-
-            if ($validator->fails()) {
-                $errors = $validator->errors();
-                if ($errors->has('email')) {
-                    $msg = 'El correo es obligatorio, debe ser válido y único.';
-                } elseif ($errors->has('phone')) {
-                    $msg = 'El teléfono es obligatorio y debe tener máximo 10 dígitos.';
-                } else {
-                    $msg = 'Datos inválidos.';
-                }
-                return response()->json([
-                    'success' => false,
-                    'message' => $msg,
-                    'errors' => $errors,
-                    'timestamp' => now(),
-                ], 400);
-            }
-
             $authenticatedUser = JWTAuth::parseToken()->authenticate();
-            
+
             if (!$authenticatedUser) {
                 return response()->json([
                     'success' => false,
@@ -874,74 +934,157 @@ class UserController extends Controller
                 ], 401);
             }
 
-            $userToEdit = User::find($id);
-            
-            if (!$userToEdit) {
+            $userRole = UserRole::where('userId', $authenticatedUser->id)->first();
+
+            if (!$userRole || $userRole->roleId != 2) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Usuario no encontrado',
-                    'timestamp' => now(),
-                ], 404);
-            }
-
-            $userRoleToEdit = UserRole::where('userId', $id)
-                ->where('createdBy', $authenticatedUser->id)
-                ->first();
-
-            if (!$userRoleToEdit) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'No tienes permisos para editar este usuario. Solo puedes editar usuarios que tú creaste.',
+                    'message' => 'No tienes permisos para editar escuelas',
                     'timestamp' => now(),
                 ], 403);
             }
 
-            $authenticatedUserRole = UserRole::where('userId', $authenticatedUser->id)->first();
+            $school = Schools::find($id);
 
-            $userToEdit->update([
-                'email' => $request->email,
-                'phone' => $request->phone,
+            if (!$school || !$school->status) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Escuela no encontrada o está inactiva',
+                    'timestamp' => now(),
+                ], 404);
+            }
+
+            $schoolUser = SchoolUsers::where('schoolId', $id)
+                ->where('userRoleId', $userRole->id)
+                ->first();
+
+            if (!$schoolUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No tienes permisos para editar esta escuela. Solo puedes editar escuelas que tú creaste.',
+                    'timestamp' => now(),
+                ], 403);
+            }
+
+            $validator = Validator::make($request->all(), [
+                'name' => 'sometimes|string|max:100',
+                'address' => 'sometimes|string',
+                'phone' => 'sometimes|string|max:10',
+                'city' => 'sometimes|string|max:50',
+                'school_types' => 'sometimes|array|min:1|max:3',
+                'school_types.*' => 'required_with:school_types|integer|in:1,2,3',
+                'director_id' => 'nullable|integer|exists:users,id', 
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Usuario actualizado exitosamente',
-                'data' => [
-                    'updated_user' => [
-                        'id' => $userToEdit->id,
-                        'firstName' => $userToEdit->firstName,
-                        'lastName' => $userToEdit->lastName,
-                        'email' => $userToEdit->email,
-                        'phone' => $userToEdit->phone,
-                        'profilePhoto' => $userToEdit->profilePhoto,
-                        'status' => $userToEdit->status,
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Datos inválidos para editar la escuela',
+                    'errors' => $validator->errors(),
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            DB::beginTransaction();
+
+            try {
+                // Actualizar los campos permitidos
+                $school->update($validator->validated());
+
+                // Si school_types viene en el request, actualiza los tipos
+                if ($request->has('school_types')) {
+                    $typeMapping = [
+                        1 => 'kindergarten',
+                        2 => 'day_care',
+                        3 => 'preschool'
+                    ];
+
+                    // Eliminar los tipos anteriores
+                    SchoolTypes::where('schoolId', $school->id)->delete();
+
+                    // Crear los nuevos tipos
+                    foreach ($request->school_types as $typeNumber) {
+                        SchoolTypes::create([
+                            'schoolId' => $school->id,
+                            'type' => $typeMapping[$typeNumber]
+                        ]);
+                    }
+                }
+
+                // Si director_id viene en el request, actualiza el director asignado
+                if ($request->has('director_id')) {
+                    // Validar que el director existe y fue creado por este owner
+                    $directorRole = UserRole::where('userId', $request->director_id)
+                        ->where('roleId', 3)
+                        ->where('createdBy', $authenticatedUser->id)
+                        ->first();
+
+                    if (!$directorRole) {
+                        DB::rollback();
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'El director seleccionado no existe o no fue creado por ti',
+                            'timestamp' => now(),
+                        ], 400);
+                    }
+
+                    SchoolUsers::where('schoolId', $school->id)
+                        ->whereHas('userRole', function($q) {
+                            $q->where('roleId', 3);
+                        })->delete();
+
+                    SchoolUsers::create([
+                        'schoolId' => $school->id,
+                        'userRoleId' => $directorRole->id
+                    ]);
+                }
+
+                DB::commit();
+
+                $types = SchoolTypes::where('schoolId', $school->id)->get()->map(function ($schoolType) {
+                    return [
+                        'id' => $schoolType->id,
+                        'type' => $schoolType->type,
+                        'type_name' => $this->getTypeName($schoolType->type)
+                    ];
+                });
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Escuela editada exitosamente',
+                    'data' => [
+                        'school' => $school,
+                        'school_types' => $types,
+                        'total_types' => $types->count(),
+                        'edited_by' => [
+                            'user_id' => $authenticatedUser->id,
+                            'user_role_id' => $userRole->id,
+                            'name' => $authenticatedUser->firstName . ' ' . $authenticatedUser->lastName,
+                            'role' => $userRole->roleId
+                        ]
                     ],
-                    'user_role_info' => [
-                        'id' => $userRoleToEdit->id,
-                        'roleId' => $userRoleToEdit->roleId,
-                        'status' => $userRoleToEdit->status,
-                        'createdBy' => $userRoleToEdit->createdBy
-                    ],
-                    'updated_by' => [
-                        'id' => $authenticatedUser->id,
-                        'name' => $authenticatedUser->firstName . ' ' . $authenticatedUser->lastName,
-                        'email' => $authenticatedUser->email,
-                        'role' => $authenticatedUserRole ? $authenticatedUserRole->roleId : null
-                    ]
-                ],
-                'timestamp' => now(),
-            ], 200);
+                    'timestamp' => now(),
+                ], 200);
+
+            } catch (\Exception $e) {
+                DB::rollback();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error al editar la escuela: ' . $e->getMessage(),
+                    'timestamp' => now(),
+                ], 500);
+            }
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error al actualizar usuario: ' . $e->getMessage(),
+                'message' => 'Error al editar la escuela: ' . $e->getMessage(),
                 'timestamp' => now(),
             ], 500);
         }
     }
 
-public function delete($id)
+    public function delete($id)
     {
         try {
             $authenticatedUser = JWTAuth::parseToken()->authenticate();
@@ -1081,5 +1224,53 @@ public function delete($id)
         }
     }
 
+    public function newPassword(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'password' => 'required|string|min:8',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La nueva contraseña es obligatoria y debe tener mínimo 8 caracteres.',
+                    'errors' => $validator->errors(),
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            $user = JWTAuth::parseToken()->authenticate();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado en el token',
+                    'timestamp' => now(),
+                ], 401);
+            }
+
+            $user->update([
+                'password' => Hash::make($request->password)
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Contraseña actualizada exitosamente',
+                'data' => [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                ],
+                'timestamp' => now(),
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cambiar contraseña: ' . $e->getMessage(),
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
     // public function revive($id) algo para poder revivir un usuario eliminado quizá?
 }

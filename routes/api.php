@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AuthorizedPeopleController;
 use App\Http\Controllers\GroupController;
 use App\Http\Controllers\GuardianController;
 use App\Http\Controllers\SchoolController;
@@ -53,11 +54,12 @@ Route::prefix('api1')->group(function () {
         Route::get('guardians/{id}', [GuardianController::class, 'show']);
         Route::get('guardians/my-profile', [GuardianController::class, 'myProfile']);
         Route::get('guardians/{schoolId}/{studentId}', [GuardianController::class, 'index']);
-        //Route::get('guardians/all/{student}', [GuardianController::class, 'guardiansList']); ESTO PARA QUÉ ERA?
         Route::put('guardians/edit/{id}', [GuardianController::class, 'edit']);
         Route::delete('guardians/delete/{id}', [GuardianController::class, 'delete']);
         Route::post('guardians/new-password', [GuardianController::class, 'newPassword']);
         Route::get('guardians/my-guardians', [GuardianController::class, 'myGuardians']);
+        //Route::get('guardians/all/{student}', [GuardianController::class, 'guardiansList']); ESTO PARA QUÉ ERA? CREO QUE ES PARA VER A LOS TUTORES QUE TENGO ASOCIADOS A MI NIÑO, OSEA, YO PAPÁ Y VER A LA OTRA TUTORA QUE ES LA MAMÁ
+
 
         // SCHOOLS
         Route::get('schools', [SchoolController::class, 'index']);
@@ -77,12 +79,15 @@ Route::prefix('api1')->group(function () {
         Route::get('groups/{schoolId}', [GroupController::class, 'index']);
 
         // AUTHORIZEDPEOPLES SIN HACER
-        Route::get('authPeoples/{student}', [GuardianController::class, 'authPeopleByStudent']);
-        Route::get('authPeoples/{id}', [GuardianController::class, 'show']);
-        Route::post('authPeoples', [GuardianController::class, 'create']);
-        Route::get('authPeoples/{id}', [GuardianController::class, 'index']);
-        Route::put('authPeoples/{id}', [GuardianController::class, 'edit']);
-        Route::delete('authPeoples/{id}', [GuardianController::class, 'delete']);
+        Route::post('authPeoples/{studentId}', [AuthorizedPeopleController::class, 'create']);
+        Route::get('authPeoples/{id}', [AuthorizedPeopleController::class, 'show']);
+        Route::put('authPeoples/{id}', [AuthorizedPeopleController::class, 'edit']);
+        Route::delete('authPeoples/{id}', [AuthorizedPeopleController::class, 'delete']);
+
+        Route::get('authPeoples/my-authorizeds/{studentId}', [AuthorizedPeopleController::class, 'myAuthorizeds']); // este es para el movil, es para poder ver los autorizados de la familia, el studentid es el filtro que dice qué niño los une
+        Route::get('authPeoples/{schoolId}/{studentId}', [AuthorizedPeopleController::class, 'index']); // para las secretarias, que vean a los autorizados de la escuela y de qué niño son, el de student es el filtro que dice qué niño es para manejarlo
+
+        // NOTIFICACIONES Y YA ES TODO SIIIIUUUUU
 
         // TODO LO DE LA CÁMARA SKRAAAAAAAAA
     });

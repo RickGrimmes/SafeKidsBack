@@ -299,11 +299,21 @@ class GuardianController extends Controller
 
             $token = JWTAuth::fromUser($guardian);
 
+            // Buscar los estudiantes relacionados a este tutor
+            $studentIds = StudentGuardian::where('guardianId', $guardian->id)
+                ->pluck('studentId')
+                ->toArray();
+
+            $students = Students::whereIn('id', $studentIds)
+                ->where('status', true)
+                ->get();
+
             return response()->json([
                 'success' => true,
                 'message' => 'Login completed successfully',
                 'data' => $guardian->makeHidden(['password', '2facode', 'created_at']),
                 'token' => $token,
+                'students' => $students,
                 'timestamp' => now(),
             ], 200);
         }

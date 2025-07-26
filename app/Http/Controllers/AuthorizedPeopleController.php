@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\AuthorizedPeople;
+use App\Models\Groups;
 use App\Models\StudentAuthorized;
+use App\Models\Students;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -123,13 +125,70 @@ class AuthorizedPeopleController extends Controller
         ]);
     }
 
-    public function myAuthorizeds()
+    public function myAuthorizeds($studentId)
     {
-        // xd
+        $authorizedIds = StudentAuthorized::where('studentId', $studentId)
+            ->pluck('authorizedId')
+            ->toArray();
+
+        // Obtener solo las personas autorizadas activas relacionadas con ese estudiante
+        $authorizedPeoples = AuthorizedPeople::whereIn('id', $authorizedIds)
+            ->where('status', true)
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Personas autorizadas del estudiante encontradas',
+            'data' => $authorizedPeoples,
+            'timestamp' => now(),
+        ]);
     }
 
-    public function index()
+    public function index($schoolId)
     {
-        // xd
+        $authorizedPeoples = AuthorizedPeople::where('status', true)->get();
+
+        $result = $authorizedPeoples->map(function ($authPerson) use ($schoolId) {
+            $studentIds = StudentAuthorized::where('authorizedId', $authPerson->id)
+                ->pluck('studentId')
+                ->toArray();
+
+            // Filtrar estudiantes que pertenecen al schoolId recibido
+            $students = Students::whereIn('id', $studentIds)
+                ->where('status', true)
+                ->get(['id', 'firstName', 'lastName'])
+                ->filter(function ($student) use ($schoolId) {
+                    $group = Groups::where('studentId', $student->id)
+                        ->where('schoolId', $schoolId)
+                        ->first();
+                    return $group !== null;
+                })
+                ->map(function ($student) use ($schoolId) {
+                    $group = Groups::where('studentId', $student->id)
+                        ->where('schoolId', $schoolId)
+                        ->first();
+                    return [
+                        'id' => $student->id,
+                        'firstName' => $student->firstName,
+                        'lastName' => $student->lastName,
+                        'gradeSection' => $group ? $group->gradeSection : null,
+                    ];
+                })
+                ->values();
+
+            return [
+                'authorized_person' => $authPerson,
+                'students' => $students,
+            ];
+        })->filter(function ($item) {
+            return count($item['students']) > 0;
+        })->values();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Personas autorizadas y sus estudiantes relacionados en la escuela',
+            'data' => $result,
+            'timestamp' => now(),
+        ]);
     }
 }

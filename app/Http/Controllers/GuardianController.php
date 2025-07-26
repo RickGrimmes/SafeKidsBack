@@ -697,6 +697,32 @@ class GuardianController extends Controller
             ], 500);
         }
     }
+
+    public function guardiansList($studentId)
+    {
+        try {
+            $guardianIds = StudentGuardian::where('studentId', $studentId)
+                ->pluck('guardianId')
+                ->toArray();
+
+            $guardians = Guardians::whereIn('id', $guardianIds)
+                ->where('status', true)
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Tutores relacionados encontrados exitosamente',
+                'data' => $guardians->makeHidden(['password', '2facode', 'created_at']),
+                'timestamp' => now(),
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al consultar tutores: ' . $e->getMessage(),
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
     
     public function refreshToken()
     {

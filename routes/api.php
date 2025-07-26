@@ -59,8 +59,7 @@ Route::prefix('api1')->group(function () {
         Route::delete('guardians/delete/{id}', [GuardianController::class, 'delete']);
         Route::post('guardians/new-password', [GuardianController::class, 'newPassword']);
         Route::get('guardians/my-guardians', [GuardianController::class, 'myGuardians']);
-        //Route::get('guardians/all/{student}', [GuardianController::class, 'guardiansList']); ESTO PARA QUÉ ERA? CREO QUE ES PARA VER A LOS TUTORES QUE TENGO ASOCIADOS A MI NIÑO, OSEA, YO PAPÁ Y VER A LA OTRA TUTORA QUE ES LA MAMÁ
-
+        Route::get('guardians/all/{studentId}', [GuardianController::class, 'guardiansList']); 
 
         // SCHOOLS
         Route::get('schools', [SchoolController::class, 'index']);
@@ -84,10 +83,11 @@ Route::prefix('api1')->group(function () {
         Route::get('authPeoples/{id}', [AuthorizedPeopleController::class, 'show']);
         Route::put('authPeoples/{id}', [AuthorizedPeopleController::class, 'edit']);
         Route::delete('authPeoples/{id}', [AuthorizedPeopleController::class, 'delete']);
-        Route::get('authPeoples/my-authorizeds/{studentId}', [AuthorizedPeopleController::class, 'myAuthorizeds']); // este es para el movil, es para poder ver los autorizados de la familia, el studentid es el filtro que dice qué niño los une
-        Route::get('authPeoples/{schoolId}/{studentId}', [AuthorizedPeopleController::class, 'index']); // para las secretarias, que vean a los autorizados de la escuela y de qué niño son, el de student es el filtro que dice qué niño es para manejarlo
+        Route::get('authPeoples/my-authorizeds/{studentId}', [AuthorizedPeopleController::class, 'myAuthorizeds']);
+        Route::get('authPeoples/students/{schoolId}', [AuthorizedPeopleController::class, 'index']);
 
-        // NOTIFICACIONES Y YA ES TODO SIIIIUUUUU
+        // NOTIFICACIONES
+        
 
         // TODO LO DE LA CÁMARA SKRAAAAAAAAA
     });

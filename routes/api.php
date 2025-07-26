@@ -41,6 +41,7 @@ Route::prefix('api1')->group(function () {
         // USERS
         Route::post('users/register', [UserController::class, 'register']);
         Route::get('users/type/{type}', [UserController::class, 'index']); 
+        Route::post('users/resend-2fa', [UserController::class, 'resend2FA']);
         Route::post('users/logout', [UserController::class, 'logout']);
         Route::get('users/my-directors', [UserController::class, 'myDirectors']);
         Route::get('users/my-profile', [UserController::class, 'myProfile']);
@@ -78,12 +79,11 @@ Route::prefix('api1')->group(function () {
         //GROUPS
         Route::get('groups/{schoolId}', [GroupController::class, 'index']);
 
-        // AUTHORIZEDPEOPLES SIN HACER
+        // AUTHORIZEDPEOPLES
         Route::post('authPeoples/{studentId}', [AuthorizedPeopleController::class, 'create']);
         Route::get('authPeoples/{id}', [AuthorizedPeopleController::class, 'show']);
         Route::put('authPeoples/{id}', [AuthorizedPeopleController::class, 'edit']);
         Route::delete('authPeoples/{id}', [AuthorizedPeopleController::class, 'delete']);
-
         Route::get('authPeoples/my-authorizeds/{studentId}', [AuthorizedPeopleController::class, 'myAuthorizeds']); // este es para el movil, es para poder ver los autorizados de la familia, el studentid es el filtro que dice qué niño los une
         Route::get('authPeoples/{schoolId}/{studentId}', [AuthorizedPeopleController::class, 'index']); // para las secretarias, que vean a los autorizados de la escuela y de qué niño son, el de student es el filtro que dice qué niño es para manejarlo
 

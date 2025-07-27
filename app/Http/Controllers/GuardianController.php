@@ -637,12 +637,12 @@ class GuardianController extends Controller
 
             $guardian = JWTAuth::parseToken()->authenticate();
 
-            if (!$guardian) {
+            if (!$guardian || !($guardian instanceof Guardians)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Guardian no encontrado en el token',
+                    'message' => 'Solo los tutores pueden cambiar su contraseña.',
                     'timestamp' => now(),
-                ], 401);
+                ], 403);
             }
 
             $guardian->update([

@@ -29,6 +29,7 @@ Route::prefix('api1')->group(function () {
     Route::post('users/password-challenge', [UserController::class, 'passwordChallenge']);
     Route::post('users/change-password', [UserController::class, 'changePassword']);
     Route::post('users/refresh-token', [UserController::class, 'refreshToken']);
+    Route::post('users/resend-2fa', [UserController::class, 'resend2FA']);
 
     // GUARDIANS
     Route::post('guardians/login', [GuardianController::class, 'login']);
@@ -41,7 +42,6 @@ Route::prefix('api1')->group(function () {
         // USERS
         Route::post('users/register', [UserController::class, 'register']);
         Route::get('users/type/{type}', [UserController::class, 'index']); 
-        Route::post('users/resend-2fa', [UserController::class, 'resend2FA']);
         Route::post('users/logout', [UserController::class, 'logout']);
         Route::get('users/my-directors', [UserController::class, 'myDirectors']);
         Route::get('users/my-profile', [UserController::class, 'myProfile']);

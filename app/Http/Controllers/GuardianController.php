@@ -254,7 +254,7 @@ class GuardianController extends Controller
             if ($validator->fails()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Validation failed, emporary token and 6-digit code are required',
+                    'message' => 'Validation failed, temporary token and 6-digit code are required',
                     'timestamp' => now(),
                 ], 400);
             }
@@ -295,11 +295,23 @@ class GuardianController extends Controller
                 ], 400);
             }
 
-            $guardian->update(['2facode' => null]);
+            if (!$guardian instanceof Guardians) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No es un tutor válido',
+                    'timestamp' => now(),
+                ], 403);
+            }
 
-            $token = JWTAuth::fromUser($guardian);
-
-            // Buscar los estudiantes relacionados a este tutor
+            try {
+                $token = JWTAuth::fromUser($guardian);
+            } catch (\Exception $e) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error al generar el token para tutor: ' . $e->getMessage(),
+                    'timestamp' => now(),
+                ], 500);
+            }
             $studentIds = StudentGuardian::where('guardianId', $guardian->id)
                 ->pluck('studentId')
                 ->toArray();
@@ -307,6 +319,9 @@ class GuardianController extends Controller
             $students = Students::whereIn('id', $studentIds)
                 ->where('status', true)
                 ->get();
+
+                
+            $guardian->update(['2facode' => null]);
 
             return response()->json([
                 'success' => true,
@@ -635,7 +650,7 @@ class GuardianController extends Controller
                 ], 400);
             }
 
-            $guardian = JWTAuth::parseToken()->authenticate();
+            $guardian = auth('guardian')->user();
 
             if (!$guardian || !($guardian instanceof Guardians)) {
                 return response()->json([

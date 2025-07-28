@@ -49,18 +49,6 @@ Route::prefix('api1')->group(function () {
         Route::delete('users/delete/{id}', [UserController::class, 'delete']);
         Route::post('users/new-password', [UserController::class, 'newPassword']);
 
-        // GUARDIANS
-        Route::post('guardians/register/{schoolId}', [GuardianController::class, 'register']);
-        Route::post('guardians/logout', [GuardianController::class, 'logout']);
-        Route::get('guardians/{id}', [GuardianController::class, 'show']);
-        Route::get('guardians/my-profile', [GuardianController::class, 'myProfile']);
-        Route::get('guardians/{schoolId}/{studentId}', [GuardianController::class, 'index']);
-        Route::put('guardians/edit/{id}', [GuardianController::class, 'edit']);
-        Route::delete('guardians/delete/{id}', [GuardianController::class, 'delete']);
-        Route::post('guardians/new-password', [GuardianController::class, 'newPassword']);
-        Route::get('guardians/my-guardians', [GuardianController::class, 'myGuardians']);
-        Route::get('guardians/all/{studentId}', [GuardianController::class, 'guardiansList']); 
-
         // SCHOOLS
         Route::get('schools', [SchoolController::class, 'index']);
         Route::get('schools/{id}', [SchoolController::class, 'show']);
@@ -92,6 +80,21 @@ Route::prefix('api1')->group(function () {
         // TODO LO DE LA CÁMARA SKRAAAAAAAAA
     });
     
+    Route::middleware('guardian.jwt')->group(function () {
+        
+        // GUARDIANS
+        Route::post('guardians/register/{schoolId}', [GuardianController::class, 'register']);
+        Route::post('guardians/logout', [GuardianController::class, 'logout']);
+        Route::get('guardians/{id}', [GuardianController::class, 'show']);
+        Route::get('guardians/my-profile', [GuardianController::class, 'myProfile']);
+        Route::get('guardians/{schoolId}/{studentId}', [GuardianController::class, 'index']);
+        Route::put('guardians/edit/{id}', [GuardianController::class, 'edit']);
+        Route::delete('guardians/delete/{id}', [GuardianController::class, 'delete']);
+        Route::post('guardians/new-password', [GuardianController::class, 'newPassword']);
+        Route::get('guardians/my-guardians', [GuardianController::class, 'myGuardians']);
+        Route::get('guardians/all/{studentId}', [GuardianController::class, 'guardiansList']); 
+
+    });
 });
 
 

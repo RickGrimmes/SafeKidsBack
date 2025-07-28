@@ -57,7 +57,6 @@ Route::prefix('api1')->group(function () {
         Route::delete('schools/delete/{id}', [SchoolController::class, 'delete']);
 
         // STUDENTS
-        Route::post('students/create/{schoolId}', [StudentController::class, 'create']);
         Route::get('students/{id}', [StudentController::class, 'show']);
         Route::get('students/seek-school/{schoolId}/{filter}', [StudentController::class, 'index']);
         Route::put('students/edit-group/{studentId}', [StudentController::class, 'editGroup']);
@@ -94,6 +93,9 @@ Route::prefix('api1')->group(function () {
         Route::get('guardians/my-guardians', [GuardianController::class, 'myGuardians']);
         Route::get('guardians/all/{studentId}', [GuardianController::class, 'guardiansList']); 
 
+        // STUDENTS
+        Route::post('students/create/{schoolId}', [StudentController::class, 'create']);
+        
     });
 });
 

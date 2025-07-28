@@ -22,6 +22,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('api1')->group(function () {
 
+    Route::get('debugToken', [GuardianController::class, 'debugToken']);
+    
     // USERS
     Route::post('users/login', [UserController::class, 'login']);
     Route::post('users/reset-password', [UserController::class, 'resetPassword']);
@@ -61,6 +63,7 @@ Route::prefix('api1')->group(function () {
         Route::get('students/seek-school/{schoolId}/{filter}', [StudentController::class, 'index']);
         Route::put('students/edit-group/{studentId}', [StudentController::class, 'editGroup']);
         Route::delete('students/delete/{id}', [StudentController::class, 'delete']);
+        Route::post('students/create/{schoolId}', [StudentController::class, 'create']);
 
         //GROUPS
         Route::get('groups/{schoolId}', [GroupController::class, 'index']);
@@ -73,6 +76,18 @@ Route::prefix('api1')->group(function () {
         Route::get('authPeoples/my-authorizeds/{studentId}', [AuthorizedPeopleController::class, 'myAuthorizeds']);
         Route::get('authPeoples/students/{schoolId}', [AuthorizedPeopleController::class, 'index']);
 
+        // GUARDIANS
+        Route::get('guardians/my-profile', [GuardianController::class, 'myProfile']);
+        Route::post('guardians/register/{schoolId}', [GuardianController::class, 'register']);
+        Route::post('guardians/logout', [GuardianController::class, 'logout']);
+        Route::get('guardians/{id}', [GuardianController::class, 'show']);
+        Route::get('guardians/{schoolId}/{studentId}', [GuardianController::class, 'index']);
+        Route::put('guardians/edit/{id}', [GuardianController::class, 'edit']);
+        Route::delete('guardians/delete/{id}', [GuardianController::class, 'delete']);
+        Route::post('guardians/new-password', [GuardianController::class, 'newPassword']);
+        //Route::get('guardians/my-guardians', [GuardianController::class, 'myGuardians']); ESTA CREO QUE NO
+        Route::get('guardians/all/{studentId}', [GuardianController::class, 'guardiansList']); 
+
         // NOTIFICACIONES
         
 
@@ -81,23 +96,6 @@ Route::prefix('api1')->group(function () {
     
     Route::middleware('guardian.jwt')->group(function () {
         
-        // GUARDIANS
-        Route::post('guardians/register/{schoolId}', [GuardianController::class, 'register']);
-        Route::post('guardians/logout', [GuardianController::class, 'logout']);
-        Route::get('guardians/{id}', [GuardianController::class, 'show']);
-        Route::get('guardians/my-profile', [GuardianController::class, 'myProfile']);
-        Route::get('guardians/{schoolId}/{studentId}', [GuardianController::class, 'index']);
-        Route::put('guardians/edit/{id}', [GuardianController::class, 'edit']);
-        Route::delete('guardians/delete/{id}', [GuardianController::class, 'delete']);
-        Route::post('guardians/new-password', [GuardianController::class, 'newPassword']);
-        Route::get('guardians/my-guardians', [GuardianController::class, 'myGuardians']);
-        Route::get('guardians/all/{studentId}', [GuardianController::class, 'guardiansList']); 
-
-        // STUDENTS
-        Route::post('students/create/{schoolId}', [StudentController::class, 'create']);
         
     });
 });
-
-
-

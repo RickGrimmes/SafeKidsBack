@@ -30,7 +30,10 @@ class AuthorizedPeopleController extends Controller
             ], 400);
         }
 
-        $authPerson = AuthorizedPeople::create($validator->validated());
+        $datos = $validator->validated();
+        $datos['status'] = true;
+
+        $authPerson = AuthorizedPeople::create($datos);
 
         StudentAuthorized::create([
             'studentId' => $studentId,

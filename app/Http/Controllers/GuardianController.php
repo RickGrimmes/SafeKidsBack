@@ -737,6 +737,44 @@ class GuardianController extends Controller
             ], 500);
         }
     }
+
+    public function myKids()
+    {
+        try {
+            $tokenPayload = JWTAuth::parseToken()->getPayload()->toArray();
+            $guardianId = $tokenPayload['sub'] ?? null;
+
+            if (!$guardianId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se pudo obtener el tutor del token.',
+                    'timestamp' => now(),
+                ], 401);
+            }
+
+            $studentIds = StudentGuardian::where('guardianId', $guardianId)
+                ->pluck('studentId')
+                ->toArray();
+
+            $students = Students::whereIn('id', $studentIds)
+                ->where('status', true)
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Estudiantes asociados encontrados exitosamente',
+                'data' => $students,
+                'timestamp' => now(),
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al consultar estudiantes: ' . $e->getMessage(),
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
     
     public function refreshToken()
     {

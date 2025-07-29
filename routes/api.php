@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthorizedPeopleController;
 use App\Http\Controllers\GroupController;
 use App\Http\Controllers\GuardianController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\SchoolController;
 use App\Http\Controllers\StudentController;
 use App\Http\Controllers\UserController;
@@ -37,6 +38,7 @@ Route::prefix('api1')->group(function () {
     Route::post('guardians/login', [GuardianController::class, 'login']);
     Route::post('guardians/reset-password', [GuardianController::class, 'resetPassword']);
     Route::post('guardians/verify-2fa', [GuardianController::class, 'verify2FA']);
+    // EL VERIFY2FA TE DEVUELVE AL USUARIO CON SU TOKEN Y LOS DATOS DE LA ESCUELA EN LA QUE ESTÁ ASOCIADO, EL OBJETO SE LLAMA SCHOOL, SALDRÁ NULL SI NO ESTÁ ENLAZADO A ALGUNA ESCUELA POR LO QUE SI TE SALE NULL, PRIMERO CHECA QUE ESTE TENGA UNA RELACIÓN A ALGUNA ESCUELA EXISTENTE
     Route::post('guardians/refresh-token', [GuardianController::class, 'refreshToken']);
 
     Route::middleware('jwt.auth')->group(function () 
@@ -87,15 +89,18 @@ Route::prefix('api1')->group(function () {
         Route::post('guardians/new-password', [GuardianController::class, 'newPassword']);
         //Route::get('guardians/my-guardians', [GuardianController::class, 'myGuardians']); ESTA CREO QUE NO
         Route::get('guardians/all/{studentId}', [GuardianController::class, 'guardiansList']); 
-
-        // NOTIFICACIONES
-        
+        Route::get('guardians/my-kids', [GuardianController::class, 'myKids']); //para obtener a los hijos del tutor
 
         // TODO LO DE LA CÁMARA SKRAAAAAAAAA
     });
     
-    Route::middleware('guardian.jwt')->group(function () {
-        
-        
+    
+    // NOTIFICACIONES
+    Route::prefix('entrada')->group(function () {
+        Route::get('create', [NotificationController::class, 'create']);
+    });
+
+    Route::prefix('salida')->group(function () {
+        Route::get('prueba', [NotificationController::class, 'prueba']);
     });
 });

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Groups;
+use App\Models\Guardians;
 use App\Models\GuardiansSchool;
 use App\Models\Schools;
 use App\Models\StudentGuardian;
@@ -121,12 +122,16 @@ class StudentController extends Controller
                 }
             }
 
+            $guardianIds = StudentGuardian::where('studentId', $student->id)->pluck('guardianId');
+            $guardians = Guardians::whereIn('id', $guardianIds)->get();
+
             return response()->json([
                 'success' => true,
                 'message' => 'Estudiante encontrado exitosamente',
                 'data' => [
                     'student' => $student,
                     'school_name' => $schoolName,
+                    'guardians' => $guardians,
                 ],
                 'timestamp' => now(),
             ], 200);

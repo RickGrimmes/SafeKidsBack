@@ -32,7 +32,7 @@ class GuardianController extends Controller
                 'lastName' => 'required|string|max:50',
                 'phone' => 'required|string|max:10',
                 'email' => 'required|email|unique:guardians,email',
-                'photo' => 'required|string',
+                'photo' => 'required|image|mimes:jpg,jpeg,png|max:2048',
                 'password' => 'required|string|min:8',
             ]);
             
@@ -74,7 +74,6 @@ class GuardianController extends Controller
             }
 
             $creatorId = $creatorUser->id;
-
             $creatorRole = UserRole::where('userId', $creatorId)->first();
 
             if (!$creatorRole) {
@@ -93,25 +92,35 @@ class GuardianController extends Controller
                 ], 400);
             }
 
-            $guardians = Guardians::create([
+            $guardian = Guardians::create([
                 'firstName' => $request->firstName,
                 'lastName' => $request->lastName,
                 'phone' => $request->phone,
                 'email' => $request->email,
-                'photo' => $request->photo,
+                'photo' => '',
                 'password' => Hash::make($request->password),
                 'status' => true,
             ]);
 
+            if ($request->hasFile('photo')) {
+                $file = $request->file('photo');
+                $firstName = strtoupper(iconv('UTF-8', 'ASCII//TRANSLIT', $guardian->firstName));
+                $lastName = strtoupper(iconv('UTF-8', 'ASCII//TRANSLIT', $guardian->lastName));
+                $fullName = preg_replace('/\s+/', '', $firstName . $lastName);
+                $fileName = $guardian->id . '_' . $fullName . '.jpg';
+                $guardian->photo = $fileName;
+                $guardian->save();
+            }
+
             GuardiansSchool::create([
-                'guardian_id' => $guardians->id,
+                'guardian_id' => $guardian->id,
                 'school_id' => $schoolId,
             ]);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Tutor registrado correctamente',
-                'data' => $guardians,
+                'data' => $guardian,
                 'timestamp' => now(),
             ], 200);
         }
@@ -138,7 +147,7 @@ class GuardianController extends Controller
             {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Validation failed',
+                    'message' => 'Validación fallida',
                     'timestamp' => now(),
                 ], 400);
             }
@@ -150,7 +159,7 @@ class GuardianController extends Controller
                 if (!$guardians->status) {
                     return response()->json([
                         'success' => false,
-                        'message' => 'Guardians is inactive',
+                        'message' => 'El tutor está inactivo',
                         'timestamp' => now(),
                     ], 403);
                 }
@@ -169,7 +178,7 @@ class GuardianController extends Controller
 
                 return response()->json([
                     'success' => true,
-                    'message' => 'Login successful',
+                    'message' => 'Login exitoso',
                     'data' => $guardians,
                     'temporaryToken' => $temporaryToken,
                     'timestamp' => now(),
@@ -179,7 +188,7 @@ class GuardianController extends Controller
             {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Invalid credentials',
+                    'message' => 'Credenciales inválidas',
                     'timestamp' => now(),
                 ], 401);
             }
@@ -188,7 +197,7 @@ class GuardianController extends Controller
         {
             return response()->json([
                 'success' => false,
-                'message' => 'Login failed',
+                'message' => 'Login fallido',
                 'timestamp' => now(),
             ], 400);
         }
@@ -205,7 +214,7 @@ class GuardianController extends Controller
             if ($validator->fails()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Email is required and must be valid',
+                    'message' => 'El email es obligatorio y debe ser válido',
                     'timestamp' => now(),
                 ], 400);
             }
@@ -215,7 +224,7 @@ class GuardianController extends Controller
             if (!$guardian) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Guardian not found',
+                    'message' => 'Tutor no encontrado',
                     'timestamp' => now(),
                 ], 404);
             }
@@ -228,7 +237,7 @@ class GuardianController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Reset password email sent',
+                'message' => 'Email de restablecimiento de contraseña enviado',
                 'timestamp' => now(),
             ], 200);
         }
@@ -253,7 +262,7 @@ class GuardianController extends Controller
             if ($validator->fails()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Validation failed, temporary token and 6-digit code are required',
+                    'message' => 'Validación fallida, se requiere un token temporal y un código de 6 dígitos',
                     'timestamp' => now(),
                 ], 400);
             }
@@ -263,7 +272,7 @@ class GuardianController extends Controller
             if (!$tokenData || !isset($tokenData['email'], $tokenData['expires_at'])) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Invalid temporary token',
+                    'message' => 'Token temporal inválido',
                     'timestamp' => now(),
                 ], 400);
             }
@@ -271,7 +280,7 @@ class GuardianController extends Controller
             if (now()->timestamp > $tokenData['expires_at']) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Temporary token has expired',
+                    'message' => 'El token temporal ha expirado',
                     'timestamp' => now(),
                 ], 400);
             }
@@ -281,7 +290,7 @@ class GuardianController extends Controller
             if (!$guardian) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Guardian not found',
+                    'message' => 'Tutor no encontrado',
                     'timestamp' => now(),
                 ], 404);
             }
@@ -289,7 +298,7 @@ class GuardianController extends Controller
             if ($guardian->{'2facode'} !== $request->code) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Invalid 2FA code',
+                    'message' => 'Código 2FA inválido',
                     'timestamp' => now(),
                 ], 400);
             }
@@ -324,7 +333,7 @@ class GuardianController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Login completed successfully',
+                'message' => 'Login completado con éxito',
                 'data' => $guardian->makeHidden(['password', '2facode', 'created_at']),
                 'token' => $token,
                 'students' => $students,
@@ -348,13 +357,13 @@ class GuardianController extends Controller
             
             return response()->json([
                 'success' => true,
-                'message' => 'Successfully logged out',
+                'message' => 'Logout exitoso',
                 'timestamp' => now(),
             ], 200);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to logout',
+                'message' => 'Logout fallido',
                 'timestamp' => now(),
             ], 500);
         }
@@ -378,7 +387,7 @@ class GuardianController extends Controller
             if (!$guardian) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Guardian not found',
+                    'message' => 'Tutor no encontrado',
                     'timestamp' => now(),
                 ], 404);
             }
@@ -387,7 +396,7 @@ class GuardianController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Guardian found successfully',
+                'message' => 'Tutor encontrado exitosamente',
                 'data' => $data,
                 'timestamp' => now(),
             ], 200);
@@ -417,7 +426,7 @@ class GuardianController extends Controller
             if (!$guardian) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Guardian not found',
+                    'message' => 'Tutor no encontrado',
                     'token_id' => $id,
                     'timestamp' => now(),
                 ], 404);
@@ -427,7 +436,7 @@ class GuardianController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Guardian profile retrieved successfully',
+                'message' => 'Perfil del tutor recuperado exitosamente',
                 'data' => $data,
                 'token_id' => $id,
                 'timestamp' => now(),
@@ -507,7 +516,7 @@ class GuardianController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Parámetro studentId inválido',
+                'message' => 'Parámetro inválido',
                 'timestamp' => now(),
             ], 400);
 
@@ -690,7 +699,7 @@ class GuardianController extends Controller
             if (!$guardian) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Guardian not found',
+                    'message' => 'Tutor no encontrado',
                     'timestamp' => now(),
                 ], 404);
             }
@@ -699,7 +708,7 @@ class GuardianController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Guardians retrieved successfully',
+                'message' => 'Tutores recuperados exitosamente',
                 'data' => $guardians->makeHidden(['2facode', 'password', 'created_at']),
                 'timestamp' => now(),
             ], 200);
@@ -821,55 +830,6 @@ class GuardianController extends Controller
                 'success' => false,
                 'message' => 'No se pudo renovar el token',
                 'error_code' => 'TOKEN_REFRESH_FAILED',
-                'timestamp' => now(),
-            ], 500);
-        }
-    }
-
-    public function debugToken()
-    {
-        try {
-            $user = null;
-            $instanceType = null;
-            $tokenPayload = null;
-            $userFromUsers = null;
-            $userFromGuardians = null;
-
-            try {
-                $user = JWTAuth::parseToken()->authenticate();
-                $instanceType = $user ? get_class($user) : null;
-            } catch (\Exception $e) {
-                $instanceType = null;
-            }
-
-            try {
-                $tokenPayload = JWTAuth::parseToken()->getPayload()->toArray();
-            } catch (\Exception $e) {
-                $tokenPayload = null;
-            }
-
-            // Busca el id en ambas tablas
-            $id = $user ? $user->id : ($tokenPayload['sub'] ?? null);
-
-            if ($id) {
-                $userFromUsers = User::find($id);
-                $userFromGuardians = Guardians::find($id);
-            }
-
-            return response()->json([
-                'success' => true,
-                'instance_type' => $instanceType,
-                'user_from_token' => $user,
-                'token_payload' => $tokenPayload,
-                'user_from_users' => $userFromUsers,
-                'user_from_guardians' => $userFromGuardians,
-                'timestamp' => now(),
-            ], 200);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al leer el token: ' . $e->getMessage(),
                 'timestamp' => now(),
             ], 500);
         }

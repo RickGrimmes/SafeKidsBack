@@ -15,6 +15,9 @@ use App\Mail\ResetPasswordMail;
 use App\Mail\TwoFactorAuthMail;
 use App\Models\Role;
 use Illuminate\Support\Facades\DB;
+use Tymon\JWTAuth\Exceptions\JWTException;
+use Tymon\JWTAuth\Exceptions\TokenExpiredException;
+use Tymon\JWTAuth\Exceptions\TokenInvalidException;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
 class UserController extends Controller
@@ -28,7 +31,7 @@ class UserController extends Controller
                 'lastName' => 'required|string|max:50',
                 'phone' => 'required|string|max:10',
                 'email' => 'required|email|unique:users,email',
-                'profilePhoto' => 'required|string',
+                'profilePhoto' => 'required|image|mimes:jpg,jpeg,png|max:2048',
                 'password' => 'required|string|min:8',
             ]);
             
@@ -103,10 +106,20 @@ class UserController extends Controller
                 'lastName' => $request->lastName,
                 'phone' => $request->phone,
                 'email' => $request->email,
-                'profilePhoto' => $request->profilePhoto,
+                'profilePhoto' => '', 
                 'password' => Hash::make($request->password),
                 'status' => true,
             ]);
+
+            if ($request->hasFile('profilePhoto')) {
+                $file = $request->file('profilePhoto');
+                $firstName = strtoupper(iconv('UTF-8', 'ASCII//TRANSLIT', $user->firstName));
+                $lastName = strtoupper(iconv('UTF-8', 'ASCII//TRANSLIT', $user->lastName));
+                $fullName = preg_replace('/\s+/', '', $firstName . $lastName);
+                $fileName = $user->id . '_' . $fullName . '.jpg';
+                $user->profilePhoto = $fileName;
+                $user->save();
+            }
 
             UserRole::create([
                 'userId' => $user->id,
@@ -156,7 +169,7 @@ class UserController extends Controller
             {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Validation failed',
+                    'message' => 'Falló la validación.',
                     'timestamp' => now(),
                 ], 400);
             }
@@ -168,7 +181,7 @@ class UserController extends Controller
                 if (!$user->status) {
                     return response()->json([
                         'success' => false,
-                        'message' => 'User is inactive',
+                        'message' => 'El usuario está inactivo',
                         'timestamp' => now(),
                     ], 403);
                 }
@@ -185,7 +198,7 @@ class UserController extends Controller
 
                 return response()->json([
                     'success' => true,
-                    'message' => 'Login successful',
+                    'message' => 'Login exitoso, código de autenticación enviado al correo',
                     'data' => $user,
                     'temporaryToken' => $temporaryToken,
                     'timestamp' => now(),
@@ -195,7 +208,7 @@ class UserController extends Controller
             {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Invalid credentials',
+                    'message' => 'Credenciales inválidas',
                     'timestamp' => now(),
                 ], 401);
             }
@@ -204,7 +217,7 @@ class UserController extends Controller
         {
             return response()->json([
                 'success' => false,
-                'message' => 'Login failed',
+                'message' => 'Login fallido',
                 'timestamp' => now(),
             ], 400);
         }
@@ -378,7 +391,7 @@ class UserController extends Controller
             if ($validator->fails()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Email is required and must be valid',
+                    'message' => 'El correo es obligatorio y debe ser válido',
                     'timestamp' => now(),
                 ], 400);
             }
@@ -401,7 +414,7 @@ class UserController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Reset password email sent',
+                'message' => 'Correo de restablecimiento de contraseña enviado',
                 'timestamp' => now(),
             ], 200);
         }
@@ -592,7 +605,7 @@ class UserController extends Controller
             if ($validator->fails()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Validation failed, temporary token and 6-digit code are required',
+                    'message' => 'Validación fallida. El token temporal y el código de 2FA son obligatorios.',
                     'timestamp' => now(),
                 ], 400);
             }
@@ -602,7 +615,7 @@ class UserController extends Controller
             if (!$tokenData || !isset($tokenData['email'], $tokenData['expires_at'])) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Invalid temporary token',
+                    'message' => 'Token temporal inválido',
                     'timestamp' => now(),
                 ], 400);
             }
@@ -610,7 +623,7 @@ class UserController extends Controller
             if (now()->timestamp > $tokenData['expires_at']) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Temporary token has expired',
+                    'message' => 'El token temporal ha expirado',
                     'timestamp' => now(),
                 ], 400);
             }
@@ -620,7 +633,7 @@ class UserController extends Controller
             if (!$user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'User not found',
+                    'message' => 'Usuario no encontrado',
                     'timestamp' => now(),
                 ], 404);
             }
@@ -628,7 +641,7 @@ class UserController extends Controller
             if ($user->{'2facode'} !== $request->code) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Invalid 2FA code',
+                    'message' => 'Código de 2FA inválido',
                     'timestamp' => now(),
                 ], 400);
             }
@@ -669,7 +682,7 @@ class UserController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Login completed successfully',
+                'message' => 'Login completado con éxito',
                 'data' => $user->makeHidden(['password', '2facode', 'created_at']),
                 'school' => $school,
                 'token' => $token,
@@ -695,7 +708,7 @@ class UserController extends Controller
             if ($validator->fails()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Temporary token is required',
+                    'message' => 'El token temporal es obligatorio',
                     'timestamp' => now(),
                 ], 400);
             }
@@ -703,14 +716,14 @@ class UserController extends Controller
             if (!$tokenData || !isset($tokenData['email'], $tokenData['expires_at'])) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Invalid temporary token',
+                    'message' => 'Token temporal inválido',
                     'timestamp' => now(),
                 ], 400);
             }
             if (now()->timestamp > $tokenData['expires_at']) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Temporary token has expired',
+                    'message' => 'El token temporal ha expirado',
                     'timestamp' => now(),
                 ], 400);
             }
@@ -718,7 +731,7 @@ class UserController extends Controller
             if (!$user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'User not found',
+                    'message' => 'Usuario no encontrado',
                     'timestamp' => now(),
                 ], 404);
             }
@@ -727,7 +740,7 @@ class UserController extends Controller
             Mail::to($user->email)->send(new TwoFactorAuthMail($user, $code));
             return response()->json([
                 'success' => true,
-                'message' => '2FA code resent successfully',
+                'message' => 'Código de 2FA reenviado con éxito',
                 'timestamp' => now(),
             ], 200);
         } catch (\Exception $e) {
@@ -746,13 +759,13 @@ class UserController extends Controller
             
             return response()->json([
                 'success' => true,
-                'message' => 'Successfully logged out',
+                'message' => 'Logout exitoso',
                 'timestamp' => now(),
             ], 200);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to logout',
+                'message' => 'Falló el cierre de sesión',
                 'timestamp' => now(),
             ], 500);
         }
@@ -1167,21 +1180,21 @@ class UserController extends Controller
                 'timestamp' => now(),
             ], 200);
 
-        } catch (\Tymon\JWTAuth\Exceptions\TokenExpiredException $e) {
+        } catch (TokenExpiredException $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Token expirado y no se puede renovar. Inicia sesión nuevamente.',
                 'error_code' => 'TOKEN_EXPIRED',
                 'timestamp' => now(),
             ], 401);
-        } catch (\Tymon\JWTAuth\Exceptions\TokenInvalidException $e) {
+        } catch (TokenInvalidException $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Token inválido',
                 'error_code' => 'TOKEN_INVALID',
                 'timestamp' => now(),
             ], 401);
-        } catch (\Tymon\JWTAuth\Exceptions\JWTException $e) {
+        } catch (JWTException $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'No se pudo renovar el token',

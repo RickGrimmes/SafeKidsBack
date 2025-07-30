@@ -11,14 +11,16 @@ use Illuminate\Support\Facades\Validator;
 
 class AuthorizedPeopleController extends Controller
 {
-    public function create(Request $request, $studentId)
+    public function create(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'firstName'    => 'required|string|max:50',
             'lastName'     => 'required|string|max:50',
             'phone'        => 'required|string|max:10',
             'relationship' => 'required|string|max:50',
-            'photo'        => 'required|string',
+            'photo'        => 'required|image|mimes:jpg,jpeg,png|max:2048',
+            'studentIds'   => 'required|array|min:1',
+            'studentIds.*' => 'required|integer|distinct',
         ]);
 
         if ($validator->fails()) {
@@ -31,14 +33,28 @@ class AuthorizedPeopleController extends Controller
         }
 
         $datos = $validator->validated();
+        $datos['photo'] = '';
         $datos['status'] = true;
 
         $authPerson = AuthorizedPeople::create($datos);
 
-        StudentAuthorized::create([
-            'studentId' => $studentId,
-            'authorizedId' => $authPerson->id,
-        ]);
+        if ($request->hasFile('photo')) {
+            $file = $request->file('photo');
+            $firstName = strtoupper(iconv('UTF-8', 'ASCII//TRANSLIT', $authPerson->firstName));
+            $lastName = strtoupper(iconv('UTF-8', 'ASCII//TRANSLIT', $authPerson->lastName));
+            $fullName = preg_replace('/\s+/', '', $firstName . $lastName);
+            $fileName = $authPerson->id . '_' . $fullName . '.jpg';
+            $authPerson->photo = $fileName;
+            $authPerson->save();
+        }
+
+        // Relacionar con todos los estudiantes recibidos
+        foreach ($request->studentIds as $studentId) {
+            StudentAuthorized::create([
+                'studentId' => $studentId,
+                'authorizedId' => $authPerson->id,
+            ]);
+        }
 
         return response()->json([
             'success' => true,

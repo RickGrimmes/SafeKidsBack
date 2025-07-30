@@ -22,8 +22,6 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::prefix('api1')->group(function () {
-
-    Route::get('debugToken', [GuardianController::class, 'debugToken']);
     
     // USERS
     Route::post('users/login', [UserController::class, 'login']);

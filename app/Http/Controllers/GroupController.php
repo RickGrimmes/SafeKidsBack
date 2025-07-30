@@ -15,6 +15,7 @@ class GroupController extends Controller
 
         return response()->json([
             'success' => true,
+            'message' => 'Secciones de grado recuperadas exitosamente',
             'gradeSections' => $uniqueGradeSections,
             'total' => $uniqueGradeSections->count(),
             'timestamp' => now(),

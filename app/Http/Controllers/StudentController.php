@@ -20,7 +20,7 @@ class StudentController extends Controller
                 'firstName' => 'required|string|max:100',
                 'lastName' => 'required|string|max:100',
                 'birthDate' => 'required|date',
-                'photo' => 'required|string',
+                'photo' => 'required|image|mimes:jpg,jpeg,png|max:2048',
                 'gradeSection' => 'required|string|max:50',
                 'guardianIds' => 'required|array|min:1|max:2',
                 'guardianIds.*' => 'required|integer|distinct',
@@ -51,7 +51,25 @@ class StudentController extends Controller
             }
 
             // Crear el estudiante
-            $student = Students::create($validator->validated() + ['status' => true]);
+            $student = Students::create([
+                'firstName' => $request->firstName,
+                'lastName' => $request->lastName,
+                'birthDate' => $request->birthDate,
+                'photo' => '',
+                'gradeSection' => $request->gradeSection,
+                'status' => true,
+            ]);
+
+            // Procesar la imagen
+            if ($request->hasFile('photo')) {
+                $file = $request->file('photo');
+                $firstName = strtoupper(iconv('UTF-8', 'ASCII//TRANSLIT', $student->firstName));
+                $lastName = strtoupper(iconv('UTF-8', 'ASCII//TRANSLIT', $student->lastName));
+                $fullName = preg_replace('/\s+/', '', $firstName . $lastName);
+                $fileName = $student->id . '_' . $fullName . '.jpg';
+                $student->photo = $fileName;
+                $student->save();
+            }
 
             // Crear el grupo
             $group = Groups::create([

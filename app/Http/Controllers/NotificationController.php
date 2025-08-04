@@ -5,11 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\AttendanceInfo;
 use App\Models\AuthorizedPeople;
 use App\Models\Guardians;
+use App\Models\GuardiansSchool;
 use App\Models\NotificationTemplates;
 use App\Models\SentNotifications;
 use App\Models\StudentAuthorized;
 use App\Models\StudentGuardian;
 use App\Models\Students;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -69,6 +71,7 @@ class NotificationController extends Controller
             'templateId' => $template ? $template->id : null,
             'sentAt' => now(),
             'status' => 'sent',
+            'created_at' => now(),
         ]);
 
         return response()->json([
@@ -84,7 +87,6 @@ class NotificationController extends Controller
     }
 
     // se checa el tutor o a authorized, en el escritorio se recibe al padre o authorized (osea su id) para identificar, luego se le muestran los estudiantes, se escanean y se muestran, si sí son, se pueden clickear para confirmar los que ya llegaron (osea se envían los ids de los niños pero hasta no dar al checkbox de ellos, no se agregan a la petición, por lo que cuando ya se salen los niños, busca a los tutores para enviarles notificación como en checkIn, fin de la salida)
-    // ya toma al guardian o auth, ve a sus chiquillos, sigue que haga ya la notificación pero creo que hay que modificar la bd para tener guardado el mensaje o así
     public function checkOut(Request $request)
     {
         $request->validate([
@@ -135,6 +137,93 @@ class NotificationController extends Controller
             }
         }
 
+        foreach ($requestedStudentIds as $studentId) {
+            // Buscar el último registro de asistencia del estudiante
+            $attendance = AttendanceInfo::where('studentId', $studentId)
+                ->orderByDesc('checkIn')
+                ->first();
+
+            if ($attendance) {
+                $attendance->update([
+                    'checkOut' => now(),
+                    'updatedAt' => now(),
+                    'pickedUpById' => $personId,
+                    'pickedUpByType' => $personType,
+                ]);
+            }
+        }
+
+        foreach ($requestedStudentIds as $studentId) {
+            $attendance = AttendanceInfo::where('studentId', $studentId)
+                ->orderByDesc('checkIn')
+                ->first();
+
+            if ($attendance) {
+                $attendance->update([
+                    'checkOut' => now(),
+                    'updatedAt' => now(),
+                    'pickedUpById' => $personId,
+                    'pickedUpByType' => $personType,
+                ]);
+            }
+        }
+
+        $guardianIds = GuardiansSchool::whereIn('student_id', $requestedStudentIds)
+            ->pluck('guardian_id')
+            ->unique()
+            ->toArray();
+
+        $guardians = Guardians::whereIn('id', $guardianIds)->get();
+
+        // Buscar el template de notificación tipo SALIDA
+        $template = NotificationTemplates::where('type', 'SALIDA')->first();
+
+        // Obtener el nombre del responsable
+        if ($personType === 'GUARDIAN') {
+            $responsable = Guardians::find($personId);
+            $nombreResponsable = $responsable ? ($responsable->firstName . ' ' . $responsable->lastName) : '';
+        } else {
+            $responsable = AuthorizedPeople::find($personId);
+            $nombreResponsable = $responsable ? ($responsable->firstName . ' ' . $responsable->lastName) : '';
+        }
+
+        // Generar los mensajes para cada estudiante
+        $mensajes = [];
+        foreach ($requestedStudentIds as $studentId) {
+            $student = Students::find($studentId);
+            if ($student && $template) {
+                $nombreEstudiante = $student->firstName . ' ' . $student->lastName;
+                $mensaje = str_replace(
+                    ['[nombreEstudiante]', '[nombreResponsable]'],
+                    [$nombreEstudiante, $nombreResponsable],
+                    $template->message
+                );
+                $mensajes[] = [
+                    'studentId' => $studentId,
+                    'mensaje' => $mensaje,
+                ];
+            }
+        }
+
+        foreach ($mensajes as $msg) {
+            $studentId = $msg['studentId'];
+            $mensaje = $msg['mensaje'];
+
+            // Buscar el último registro de sent_notifications para ese estudiante, del mismo día
+            $sentNotification = SentNotifications::where('studentId', $studentId)
+                ->whereDate('created_at', Carbon::today())
+                ->orderByDesc('created_at')
+                ->first();
+
+            if ($sentNotification) {
+                $sentNotification->update([
+                    'updated_at' => now(),
+                    'last_type' => 'SALIDA',
+                    'last_message' => $mensaje,
+                ]);
+            }
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Salida registrada correctamente',
@@ -145,5 +234,10 @@ class NotificationController extends Controller
             ],
             'timestamp' => now(),
         ]);
+    }
+
+    public function sendNotification()
+    {
+        
     }
 }

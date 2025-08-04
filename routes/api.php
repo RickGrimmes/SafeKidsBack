@@ -89,16 +89,21 @@ Route::prefix('api1')->group(function () {
         Route::get('guardians/all/{studentId}', [GuardianController::class, 'guardiansList']); 
         Route::get('guardians/my-kids', [GuardianController::class, 'myKids']); //para obtener a los hijos del tutor
 
-        // TODO LO DE LA CÁMARA SKRAAAAAAAAA
+        // PARA LA CÁMARA
+        // PARA GUARDAR LAS IMÁGENES DEBE DE USAR TANTO LOS MÉTODOS DE CREAR Y REGISTRAR DE AQUÍ, COMO LOS DE PYTHON, LARAVEL SOLO CAPTURA LOS DATOS Y PYTHON LA IMAGEN PARA GUARDARLA EN EL DISCO
+        // PARA LA ENTRADA, ESTE IGUAL ENVIA LA IMAGEN DESDE PYTHON, ESTE YA PROCESA Y BUSCA, RETORNA ALGO, DEBO DECIRLE QUE SI ENCUENTRA PUES QUE ENVÍE LA NOTIFICACIÓN
     });
     
     
     // NOTIFICACIONES
+
+    //VER LAS NOTIFICACIONES
+
     Route::prefix('entrada')->group(function () {
-        Route::get('create', [NotificationController::class, 'create']);
+        Route::post('check-in', [NotificationController::class, 'checkIn']);
     });
 
     Route::prefix('salida')->group(function () {
-        Route::get('prueba', [NotificationController::class, 'prueba']);
+        Route::get('check-out', [NotificationController::class, 'checkOut']);
     });
 });

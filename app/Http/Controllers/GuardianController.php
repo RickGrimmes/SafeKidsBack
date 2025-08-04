@@ -750,18 +750,24 @@ class GuardianController extends Controller
     public function myKids()
     {
         try {
+            // Toma el token y saca el id
             $tokenPayload = JWTAuth::parseToken()->getPayload()->toArray();
-            $guardianId = $tokenPayload['sub'] ?? null;
+            $id = $tokenPayload['sub'];
 
-            if (!$guardianId) {
+            // Busca en guardians por ese id
+            $guardian = Guardians::find($id);
+
+            if (!$guardian) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'No se pudo obtener el tutor del token.',
+                    'message' => 'Tutor no encontrado',
+                    'token_id' => $id,
                     'timestamp' => now(),
-                ], 401);
+                ], 404);
             }
 
-            $studentIds = StudentGuardian::where('guardianId', $guardianId)
+            // Busca los estudiantes asociados
+            $studentIds = StudentGuardian::where('guardianId', $guardian->id)
                 ->pluck('studentId')
                 ->toArray();
 
@@ -773,6 +779,7 @@ class GuardianController extends Controller
                 'success' => true,
                 'message' => 'Estudiantes asociados encontrados exitosamente',
                 'data' => $students,
+                'token_id' => $id,
                 'timestamp' => now(),
             ], 200);
 

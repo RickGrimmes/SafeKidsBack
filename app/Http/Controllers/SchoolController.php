@@ -530,7 +530,12 @@ class SchoolController extends Controller
                             if ($secondSchoolUser) {
                                 $secondSchoolUser->userRoleId = $directorUserRole->id;
                                 $secondSchoolUser->save();
-                                $directorSchoolUserId = $secondSchoolUser->id;
+                            } else {
+                                // Si no hay segundo registro, crea uno nuevo para el director
+                                SchoolUsers::create([
+                                    'schoolId' => $school->id,
+                                    'userRoleId' => $directorUserRole->id
+                                ]);
                             }
                         }
                     }

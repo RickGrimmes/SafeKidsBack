@@ -14,6 +14,7 @@ use App\Models\Students;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class NotificationController extends Controller
 {
@@ -243,12 +244,49 @@ class NotificationController extends Controller
     }
 
     // este ya muestra todos, ahora lo que sigue es que separe las entradas de salidas, que tome el token del guardian para ubicar al guardian, que solo tenga a sus chiquillos al alcance de los filtros y ya
-    // tengo un método que me devuelve solo a mis chiquillos? porque lo ocupo aquí, estudiantes según el guardian
+    // tengo un método que me devuelve solo a mis chiquillos según el guardian? porque lo ocupo aquí, estudiantes según el guardian
     public function myNotifications($studentId = null, $dayFilter = 4)
     {
+        // Obtener el id del guardian desde el token, sin importar el modelo
+        $tokenPayload = null;
+        try {
+            $tokenPayload = JWTAuth::parseToken()->getPayload()->toArray();
+        } catch (\Exception $e) {
+            $tokenPayload = null;
+        }
+
+        $id = $tokenPayload['sub'] ?? null;
+        $guardian = $id ? Guardians::find($id) : null;
+
+        if (!$guardian) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tutor no encontrado',
+                'timestamp' => now(),
+            ], 404);
+        }
+
+        // Buscar todos los studentIds relacionados con este tutor
+        $studentIds = StudentGuardian::where('guardianId', $guardian->id)
+            ->pluck('studentId')
+            ->toArray();
+
+        if (empty($studentIds)) {
+            return response()->json([
+                'success' => true,
+                'message' => 'No hay estudiantes asociados a este tutor',
+                'data' => [],
+                'count' => 0,
+                'timestamp' => now(),
+            ], 200);
+        }
+
         $query = SentNotifications::query();
 
-        // Filtrar por studentId si se envía
+        // Filtrar por los studentIds del tutor
+        $query->whereIn('studentId', $studentIds);
+
+        // Si se envía un studentId específico, filtra solo ese
         if ($studentId && $studentId !== 'All') {
             $query->where('studentId', $studentId);
         }
@@ -270,7 +308,7 @@ class NotificationController extends Controller
                 break;
             case 4: // Todos
             default:
-                // Acá no filtra na
+                // Sin filtro extra
                 break;
         }
 

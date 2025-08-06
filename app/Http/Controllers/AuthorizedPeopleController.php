@@ -163,16 +163,22 @@ class AuthorizedPeopleController extends Controller
         ]);
     }
 
-    public function index($schoolId)
+    public function index($schoolId, $studentId = 'ALL')
     {
         $authorizedPeoples = AuthorizedPeople::where('status', true)->get();
 
-        $result = $authorizedPeoples->map(function ($authPerson) use ($schoolId) {
+        $result = $authorizedPeoples->map(function ($authPerson) use ($schoolId, $studentId) {
             $studentIds = StudentAuthorized::where('authorizedId', $authPerson->id)
                 ->pluck('studentId')
                 ->toArray();
 
-            // Filtrar estudiantes que pertenecen al schoolId recibido
+            if ($studentId !== 'ALL') {
+                if (!in_array($studentId, $studentIds)) {
+                    return null;
+                }
+                $studentIds = [$studentId];
+            }
+
             $students = Students::whereIn('id', $studentIds)
                 ->where('status', true)
                 ->get(['id', 'firstName', 'lastName'])
@@ -199,9 +205,11 @@ class AuthorizedPeopleController extends Controller
                 'authorized_person' => $authPerson,
                 'students' => $students,
             ];
-        })->filter(function ($item) {
-            return count($item['students']) > 0;
-        })->values();
+        })
+        ->filter(function ($item) {
+            return $item && count($item['students']) > 0;
+        })
+        ->values();
 
         return response()->json([
             'success' => true,

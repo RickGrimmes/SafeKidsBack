@@ -84,7 +84,7 @@ Route::prefix('api1')->group(function () {
         Route::put('authPeoples/{id}', [AuthorizedPeopleController::class, 'edit']);
         Route::delete('authPeoples/{id}', [AuthorizedPeopleController::class, 'delete']);
         Route::get('authPeoples/my-authorizeds/{studentId}', [AuthorizedPeopleController::class, 'myAuthorizeds']);
-        Route::get('authPeoples/students/{schoolId}', [AuthorizedPeopleController::class, 'index']);
+        Route::get('authPeoples/{schoolId}/{studentId}', [AuthorizedPeopleController::class, 'index']);
         #endregion
 
         #region GUARDIANS
@@ -96,17 +96,21 @@ Route::prefix('api1')->group(function () {
         Route::put('guardians/edit/{id}', [GuardianController::class, 'edit']);
         Route::delete('guardians/delete/{id}', [GuardianController::class, 'delete']);
         Route::post('guardians/new-password', [GuardianController::class, 'newPassword']);
-        //Route::get('guardians/my-guardians', [GuardianController::class, 'myGuardians']); ESTA CREO QUE NO
+        Route::get('guardians/my-guardians', [GuardianController::class, 'myGuardians']); // para ver a los demás tutores aparte de yo tutor, para vista móvil
         Route::get('guardians/all/{studentId}', [GuardianController::class, 'guardiansList']); 
         Route::get('guardians/my-kids', [GuardianController::class, 'myKids']); //para obtener a los hijos del tutor
         #endregion
 
+        #region NOTIFICATIONS
+        Route::get('notifications/my-notifications/{studentId}/{dayFilter}', [NotificationController::class, 'myNotifications']);
+        #endregion
+        
         // PARA LA CÁMARA
         // PARA GUARDAR LAS IMÁGENES DEBE DE USAR TANTO LOS MÉTODOS DE CREAR Y REGISTRAR DE AQUÍ, COMO LOS DE PYTHON, LARAVEL SOLO CAPTURA LOS DATOS Y PYTHON LA IMAGEN PARA GUARDARLA EN EL DISCO
     });
     
     
-    #region NOTIFICACIONES
+    #region NOTIFICACIONES SALIDA Y ENTRADA
     Route::prefix('entrada')->group(function () {
         Route::post('check-in', [NotificationController::class, 'checkIn']);
     });
@@ -115,7 +119,5 @@ Route::prefix('api1')->group(function () {
         Route::get('check-out', [NotificationController::class, 'checkOut']);
     });
 
-        // NOTIFICACIONES
-        Route::get('notifications/my-notifications/{studentId}/{dayFilter}', [NotificationController::class, 'myNotifications']);
     #endregion
 });

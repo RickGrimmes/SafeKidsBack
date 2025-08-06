@@ -920,7 +920,7 @@ class GuardianController extends Controller
         }
     }
 
-    public function myGuardians() //POSIBLE BORRAR
+    public function myGuardiansOld() 
     {
         try {
             $guardian = JWTAuth::parseToken()->authenticate();
@@ -945,6 +945,73 @@ class GuardianController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Server failed',
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+
+    public function myGuardians()
+    {
+        try {
+            // Obtener el id del tutor desde el token, sin importar el modelo
+            $tokenPayload = null;
+            try {
+                $tokenPayload = JWTAuth::parseToken()->getPayload()->toArray();
+            } catch (\Exception $e) {
+                $tokenPayload = null;
+            }
+
+            $id = $tokenPayload['sub'] ?? null;
+            $guardian = $id ? Guardians::find($id) : null;
+
+            if (!$guardian) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Tutor no encontrado',
+                    'timestamp' => now(),
+                ], 404);
+            }
+
+            // 1. Buscar el primer registro en student_guardian para este tutor
+            $studentGuardian = StudentGuardian::where('guardianId', $guardian->id)->first();
+
+            if (!$studentGuardian) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'No hay estudiantes asociados a este tutor',
+                    'data' => [],
+                    'timestamp' => now(),
+                ], 200);
+            }
+
+            $studentId = $studentGuardian->studentId;
+
+            // 2. Buscar todos los guardianes asociados a ese estudiante
+            $guardianIds = StudentGuardian::where('studentId', $studentId)
+                ->pluck('guardianId')
+                ->toArray();
+
+            // 3. Omitir al tutor que inició la petición
+            $guardianIds = array_filter($guardianIds, function($gid) use ($guardian) {
+                return $gid != $guardian->id;
+            });
+
+            // 4. Obtener los datos de los guardianes restantes
+            $guardians = Guardians::whereIn('id', $guardianIds)
+                ->where('status', true)
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Tutores relacionados encontrados exitosamente',
+                'data' => $guardians->makeHidden(['password', '2facode', 'created_at']),
+                'timestamp' => now(),
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al consultar tutores: ' . $e->getMessage(),
                 'timestamp' => now(),
             ], 500);
         }

@@ -815,41 +815,30 @@ class UserController extends Controller
     {
         try {
             $validator = Validator::make($request->all(), [
-                'temporaryToken' => 'required|string',
+                'code' => 'required|string|size:6',
             ]);
             if ($validator->fails()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'El token temporal es obligatorio',
+                    'message' => 'El código de 6 dígitos es obligatorio',
                     'timestamp' => now(),
                 ], 400);
             }
-            $tokenData = json_decode(base64_decode($request->temporaryToken), true);
-            if (!$tokenData || !isset($tokenData['email'], $tokenData['expires_at'])) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Token temporal inválido',
-                    'timestamp' => now(),
-                ], 400);
-            }
-            if (now()->timestamp > $tokenData['expires_at']) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'El token temporal ha expirado',
-                    'timestamp' => now(),
-                ], 400);
-            }
-            $user = User::where('email', $tokenData['email'])->first();
+
+            // Buscar al usuario por el código enviado
+            $user = User::where('2facode', $request->code)->first();
             if (!$user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Usuario no encontrado',
+                    'message' => 'Código inválido o expirado',
                     'timestamp' => now(),
                 ], 404);
             }
+
             $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
             $user->update(['2facode' => $code]);
             Mail::to($user->email)->send(new TwoFactorAuthMail($user, $code));
+
             return response()->json([
                 'success' => true,
                 'message' => 'Código de 2FA reenviado con éxito',

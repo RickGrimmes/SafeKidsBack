@@ -7,6 +7,7 @@ use App\Mail\TwoFactorAuthMail;
 use App\Models\Groups;
 use App\Models\Guardians;
 use App\Models\GuardiansSchool;
+use App\Models\Schools;
 use App\Models\StudentGuardian;
 use App\Models\Students;
 use App\Models\User;
@@ -329,6 +330,15 @@ class GuardianController extends Controller
                 ->where('status', true)
                 ->get();
 
+            $group = null;
+            $school = null;
+            if (count($studentIds) > 0) {
+                $group = Groups::whereIn('studentId', $studentIds)->first();
+                if ($group) {
+                    $school = Schools::find($group->schoolId);
+                }
+            }
+
             $guardian->update(['2facode' => null]);
 
             return response()->json([
@@ -337,6 +347,7 @@ class GuardianController extends Controller
                 'data' => $guardian->makeHidden(['password', '2facode', 'created_at']),
                 'token' => $token,
                 'students' => $students,
+                'school' => $school,
                 'timestamp' => now(),
             ], 200);
         }
@@ -530,41 +541,30 @@ class GuardianController extends Controller
     {
         try {
             $validator = Validator::make($request->all(), [
-                'temporaryToken' => 'required|string',
+                'code' => 'required|string|size:6',
             ]);
             if ($validator->fails()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'El token temporal es obligatorio',
+                    'message' => 'El código de 6 dígitos es obligatorio',
                     'timestamp' => now(),
                 ], 400);
             }
-            $tokenData = json_decode(base64_decode($request->temporaryToken), true);
-            if (!$tokenData || !isset($tokenData['email'], $tokenData['expires_at'])) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Token temporal inválido',
-                    'timestamp' => now(),
-                ], 400);
-            }
-            if (now()->timestamp > $tokenData['expires_at']) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'El token temporal ha expirado',
-                    'timestamp' => now(),
-                ], 400);
-            }
-            $guardian = Guardians::where('email', $tokenData['email'])->first();
+
+            // Buscar al tutor por el código enviado
+            $guardian = Guardians::where('2facode', $request->code)->first();
             if (!$guardian) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Usuario no encontrado',
+                    'message' => 'Código inválido o expirado',
                     'timestamp' => now(),
                 ], 404);
             }
+
             $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
             $guardian->update(['2facode' => $code]);
             Mail::to($guardian->email)->send(new TwoFactorAuthMail($guardian, $code));
+
             return response()->json([
                 'success' => true,
                 'message' => 'Código de 2FA reenviado con éxito',

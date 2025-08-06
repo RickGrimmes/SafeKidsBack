@@ -35,13 +35,14 @@ Route::prefix('api1')->group(function () {
 
     #region GUARDIANS
     Route::post('guardians/login', [GuardianController::class, 'login']);
-    Route::post('guardians/reset-password', [GuardianController::class, 'resetPassword']);
+    Route::post('guardians/reset-password', [GuardianController::class, 'resetPassword']); //si le da a olvidé contraseña, usa este, pide el correo para saber a quién enviar el código de restablecimiento
     Route::post('guardians/verify-2fa', [GuardianController::class, 'verify2FA']);
-    Route::post('guardians/password-challenge', [GuardianController::class, 'passwordChallenge']);
-    Route::post('guardians/change-password', [GuardianController::class, 'changePassword']);
+    Route::post('guardians/password-challenge', [GuardianController::class, 'passwordChallenge']); //sigue aquí para verificar la contraseña del usuario antes de cambiarla, le pido el código y si sí le doy el resetToken para que vaya a modificar
+    Route::post('guardians/change-password', [GuardianController::class, 'changePassword']); //si todo bien, pasa por acá y pido el resetToken para saber a quién es, pido contraseña y listo
     // EL VERIFY2FA TE DEVUELVE AL USUARIO CON SU TOKEN Y LOS DATOS DE LA ESCUELA EN LA QUE ESTÁ ASOCIADO, EL OBJETO SE LLAMA SCHOOL, SALDRÁ NULL SI NO ESTÁ ENLAZADO A ALGUNA ESCUELA POR LO QUE SI TE SALE NULL, PRIMERO CHECA QUE ESTE TENGA UNA RELACIÓN A ALGUNA ESCUELA EXISTENTE
     Route::post('guardians/refresh-token', [GuardianController::class, 'refreshToken']);
-    Route::post('guardians/resend-2fa', [GuardianController::class, 'resend2FA']);
+    Route::post('guardians/resend-2fa', [GuardianController::class, 'resend2FA']); //viene del passwordChallenge, si le pongo que me reenvíe el 2fa, este pide el código que pusiste, para ubicar al tutor y ya con eso re enviarle el código
+    
     #endregion
 
     Route::middleware('jwt.auth')->group(function () 
@@ -98,7 +99,7 @@ Route::prefix('api1')->group(function () {
         Route::post('guardians/new-password', [GuardianController::class, 'newPassword']);
         Route::get('guardians/my-guardians', [GuardianController::class, 'myGuardians']); // para ver a los demás tutores aparte de yo tutor, para vista móvil
         Route::get('guardians/all/{studentId}', [GuardianController::class, 'guardiansList']); 
-        Route::get('guardians/my-kids', [GuardianController::class, 'myKids']); //para obtener a los hijos del tutor
+        Route::get('guardians/my-kids', [GuardianController::class, 'myKids']); //para obtener a los hijos del tutor, sirve también para el filtro de mis hijos en notificaciones
         #endregion
 
         #region NOTIFICATIONS

@@ -419,12 +419,15 @@ class GuardianController extends Controller
             $validator = Validator::make($request->all(), [
                 'resetToken' => 'required|string',
                 'password' => 'required|string|min:8',
+                'password_confirmation' => 'required|string|min:8',
             ]);
 
             if ($validator->fails()) {
                 $errors = $validator->errors();
                 if ($errors->has('password')) {
                     $msg = 'La nueva contraseña es obligatoria y debe tener mínimo 8 caracteres.';
+                } elseif ($errors->has('password_confirmation')) {
+                    $msg = 'La confirmación de contraseña es obligatoria y debe tener mínimo 8 caracteres.';
                 } elseif ($errors->has('resetToken')) {
                     $msg = 'Token de reset es obligatorio.';
                 } else {
@@ -434,6 +437,14 @@ class GuardianController extends Controller
                     'success' => false,
                     'message' => $msg,
                     'errors' => $errors,
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            if ($request->password !== $request->password_confirmation) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Las contraseñas no coinciden.',
                     'timestamp' => now(),
                 ], 400);
             }

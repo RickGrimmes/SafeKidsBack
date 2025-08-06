@@ -518,15 +518,20 @@ class SchoolController extends Controller
                             ->where('userRoleId', $directorUserRole->id)
                             ->first();
 
-                        // Guardar el id para después
                         $directorSchoolUserId = $directorSchoolUser ? $directorSchoolUser->id : null;
-                    } else {
-                        // Si no existe es que el director es nuevo, busca el primer registro de school_users con ese schoolId
-                        $schoolUserToUpdate = SchoolUsers::where('schoolId', $school->id)->first();
 
-                        if ($schoolUserToUpdate) {
-                            $schoolUserToUpdate->userRoleId = $request->director_id;
-                            $schoolUserToUpdate->save();
+                        // Si no existe el registro, actualiza el segundo registro de school_users que es sí o sí, director
+                        if (!$directorSchoolUser) {
+                            $secondSchoolUser = SchoolUsers::where('schoolId', $school->id)
+                                ->orderBy('id', 'asc')
+                                ->skip(1)
+                                ->first();
+
+                            if ($secondSchoolUser) {
+                                $secondSchoolUser->userRoleId = $directorUserRole->id;
+                                $secondSchoolUser->save();
+                                $directorSchoolUserId = $secondSchoolUser->id;
+                            }
                         }
                     }
                 }

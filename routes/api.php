@@ -109,7 +109,6 @@ Route::prefix('api1')->group(function () {
         // PARA GUARDAR LAS IMÁGENES DEBE DE USAR TANTO LOS MÉTODOS DE CREAR Y REGISTRAR DE AQUÍ, COMO LOS DE PYTHON, LARAVEL SOLO CAPTURA LOS DATOS Y PYTHON LA IMAGEN PARA GUARDARLA EN EL DISCO
     });
     
-    
     #region NOTIFICACIONES SALIDA Y ENTRADA
     Route::prefix('entrada')->group(function () {
         Route::post('check-in', [NotificationController::class, 'checkIn']);

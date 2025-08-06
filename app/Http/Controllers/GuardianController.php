@@ -383,8 +383,8 @@ class GuardianController extends Controller
             ], 400);
         }
 
-        $temporaryToken = base64_encode(json_encode([
-            'user_id' => $guardian->id,
+        $resetToken = base64_encode(json_encode([
+            'guardian_id' => $guardian->id,
             'email' => $guardian->email,
             'purpose' => 'password_reset',
             'expires_at' => now()->addMinutes(15)->timestamp,
@@ -395,12 +395,12 @@ class GuardianController extends Controller
             'success' => true,
             'message' => 'Código verificado correctamente',
             'data' => [
-                'user_id' => $guardian->id,
+                'guardian_id' => $guardian->id,
                 'email' => $guardian->email,
                 'firstName' => $guardian->firstName,
                 'lastName' => $guardian->lastName
             ],
-            'resetToken' => $temporaryToken,
+            'resetToken' => $resetToken,
             'timestamp' => now(),
         ], 200);
 
@@ -413,7 +413,7 @@ class GuardianController extends Controller
         }
     }
 
-    public function changePassword(Request $request)
+    public function changePassword(Request $request) 
     {
         try {
             $validator = Validator::make($request->all(), [
@@ -526,7 +526,7 @@ class GuardianController extends Controller
         }
     }
 
-    public function resend2fa(Request $request) 
+    public function resend2fa(Request $request)  
     {
         try {
             $validator = Validator::make($request->all(), [

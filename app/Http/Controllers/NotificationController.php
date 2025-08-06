@@ -238,6 +238,49 @@ class NotificationController extends Controller
 
     public function sendNotification()
     {
-        
+        // igual y usamos fcm para poder generar las notificaciones sms, hacemos que cada que se haga checkin o checkout se busque el fcm_token de los guardianes y los otros monos y se envíe un mensaje genérico que diga TIENES NOTIFICACIONES NUEVAS, PRESIONA PARA VER y ya nomás que con eso entre en la vista de notificaciones, me falta una tabla de ver notificaciones
+        // si es con fcm debo modificar la bd de guardians y de los authorized para meterles fcm_token y poder enviar la notificación
+    }
+
+    // este ya muestra todos, ahora lo que sigue es que separe las entradas de salidas, que tome el token del guardian para ubicar al guardian, que solo tenga a sus chiquillos al alcance de los filtros y ya
+    // tengo un método que me devuelve solo a mis chiquillos? porque lo ocupo aquí, estudiantes según el guardian
+    public function myNotifications($studentId = null, $dayFilter = 4)
+    {
+        $query = SentNotifications::query();
+
+        // Filtrar por studentId si se envía
+        if ($studentId && $studentId !== 'All') {
+            $query->where('studentId', $studentId);
+        }
+
+        // Filtrar por fecha según dayFilter
+        switch ((int)$dayFilter) {
+            case 1: // Hoy
+                $query->whereDate('created_at', Carbon::today());
+                break;
+            case 2: // Esta semana
+                $query->whereBetween('created_at', [
+                    Carbon::now()->startOfWeek(),
+                    Carbon::now()->endOfWeek()
+                ]);
+                break;
+            case 3: // Este mes
+                $query->whereMonth('created_at', Carbon::now()->month)
+                    ->whereYear('created_at', Carbon::now()->year);
+                break;
+            case 4: // Todos
+            default:
+                // Acá no filtra na
+                break;
+        }
+
+        $notifications = $query->orderByDesc('created_at')->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $notifications,
+            'count' => $notifications->count(),
+            'timestamp' => now(),
+        ]);
     }
 }

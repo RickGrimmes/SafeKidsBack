@@ -156,6 +156,118 @@ class UserController extends Controller
         }
     }
 
+    public function registerOwner(Request $request)
+    {
+        try
+        {
+            $validator = Validator::make($request->all(), [
+                'firstName' => 'required|string|max:50',
+                'lastName' => 'required|string|max:50',
+                'phone' => 'required|string|max:10',
+                'email' => 'required|email|unique:users,email',
+                'password' => 'required|string|min:8',
+            ]);
+            
+            if ($validator->fails()) {
+                $errors = $validator->errors();
+                if ($errors->has('firstName')) {
+                    $msg = 'El nombre es obligatorio y debe tener máximo 50 caracteres.';
+                } elseif ($errors->has('lastName')) {
+                    $msg = 'El apellido es obligatorio y debe tener máximo 50 caracteres.';
+                } elseif ($errors->has('phone')) {
+                    $msg = 'El teléfono es obligatorio y debe tener máximo 10 dígitos.';
+                } elseif ($errors->has('email')) {
+                    $msg = 'El correo es obligatorio, debe ser válido y único.';
+                } elseif ($errors->has('password')) {
+                    $msg = 'La contraseña es obligatoria y debe tener mínimo 8 caracteres.';
+                } elseif ($errors->has('password')) {
+                    $msg = 'La contraseña es obligatoria y debe tener mínimo 8 caracteres.';
+                } else {
+                    $msg = 'Datos inválidos.';
+                }
+                return response()->json([
+                    'success' => false,
+                    'message' => $msg,
+                    'errors' => $errors,
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            $creatorUser = JWTAuth::parseToken()->authenticate();
+        
+            if (!$creatorUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado en el token',
+                    'timestamp' => now(),
+                ], 401);
+            }
+
+            $creatorId = $creatorUser->id;
+
+            if ($creatorId == 1)
+            {
+                $newUserRoleId = 2;
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El rol del usuario creador no es válido.',
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            $user = User::create([
+                'firstName' => $request->firstName,
+                'lastName' => $request->lastName,
+                'phone' => $request->phone,
+                'email' => $request->email,
+                'profilePhoto' => '', 
+                'password' => Hash::make($request->password),
+                'status' => true,
+            ]);
+
+            $firstName = strtoupper(iconv('UTF-8', 'ASCII//TRANSLIT', $user->firstName));
+            $lastName = strtoupper(iconv('UTF-8', 'ASCII//TRANSLIT', $user->lastName));
+            $fullName = preg_replace('/\s+/', '', $firstName . $lastName);
+            $fileName = $user->id . '_' . $fullName . '.jpg';
+            $user->profilePhoto = $fileName;
+            $user->save();
+
+            UserRole::create([
+                'userId' => $user->id,
+                'roleId' => $newUserRoleId,
+                'status' => true,
+                'createdBy' => $creatorId,
+            ]);
+    
+            $creatorRole = UserRole::where('userId', $creatorId)->first();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Usuario registrado correctamente',
+                'data' => [
+                    'createdUser' => $user->makeHidden(['password', '2facode', 'created_at']),
+                    'createdUserRole' => $newUserRoleId,
+                    'createdBy' => [
+                        'id' => $creatorUser->id,
+                        'name' => $creatorUser->firstName . ' ' . $creatorUser->lastName,
+                        'email' => $creatorUser->email,
+                        'role' => $creatorRole ? $creatorRole->roleId : 'Super Admin'
+                    ]
+                ],
+                'timestamp' => now(),
+            ], 200);
+        }
+        catch (\Exception $e)
+        {
+            return response()->json([
+                    'success' => false,
+                    'message' => 'Server failed',
+                    'timestamp' => now(),
+            ], 500);
+        }
+    }
+
     public function login(Request $request)
     {
         try
@@ -771,7 +883,88 @@ class UserController extends Controller
         }
     }
 
-   public function myDirectors()
+    public function myDirectors()
+    {
+        try {
+            $authenticatedUser = JWTAuth::parseToken()->authenticate();
+            
+            if (!$authenticatedUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado en el token',
+                    'timestamp' => now(),
+                ], 401);
+            }
+
+            $userRole = UserRole::where('userId', $authenticatedUser->id)->first();
+            
+            if (!$userRole) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El usuario no tiene rol asignado',
+                    'timestamp' => now(),
+                ], 403);
+            }
+
+            if ($userRole->roleId !== 2) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No tienes permisos para consultar esta información.',
+                    'timestamp' => now(),
+                ], 403);
+            }
+
+            $directorRoles = UserRole::where('roleId', 3)
+                ->where('createdBy', $authenticatedUser->id)
+                ->get();
+
+            if ($directorRoles->isEmpty()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'No has creado ningún director aún',
+                    'data' => [],
+                    'owner_info' => [
+                        'id' => $authenticatedUser->id,
+                        'name' => $authenticatedUser->firstName . ' ' . $authenticatedUser->lastName,
+                        'email' => $authenticatedUser->email
+                    ],
+                    'timestamp' => now(),
+                ], 200);
+            }
+
+            $directorIds = $directorRoles->pluck('userId');
+
+            $directors = User::whereIn('id', $directorIds)
+                ->where('status', true) 
+                ->select('id', 'firstName', 'lastName', 'email', 'phone', 'profilePhoto', 'status')
+                ->get();
+
+            $directorsWithoutSchool = $directors->filter(function ($director) use ($directorRoles) {
+                $directorRole = $directorRoles->where('userId', $director->id)->first();
+                if (!$directorRole) return false;
+                // Verifica si NO tiene ningún registro en school_users
+                $hasSchool = SchoolUsers::where('userRoleId', $directorRole->id)->exists();
+                return !$hasSchool;
+            })->values();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Directores y sus escuelas asignadas encontrados exitosamente',
+                'data' => $directorsWithoutSchool,
+                'total_directors' => $directorsWithoutSchool->count(),
+                'timestamp' => now(),
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al consultar directores: ' . $e->getMessage(),
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+    
+    public function myDirectorsOld()
     {
         try {
             $authenticatedUser = JWTAuth::parseToken()->authenticate();
@@ -1099,6 +1292,16 @@ class UserController extends Controller
                 ], 403);
             }
 
+            // NUEVO BLOQUE: Validar si tiene asignación en school_users
+            $schoolUserExists = SchoolUsers::where('userRoleId', $userRoleToDelete->id)->exists();
+            if ($schoolUserExists) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se puede eliminar este usuario porque está asignado a una escuela.',
+                    'timestamp' => now(),
+                ], 400);
+            }
+
             if (!$userToDelete->status) {
                 return response()->json([
                     'success' => false,
@@ -1110,6 +1313,10 @@ class UserController extends Controller
             $authenticatedUserRole = UserRole::where('userId', $authenticatedUser->id)->first();
 
             $userToDelete->update([
+                'status' => false,
+            ]);
+
+            UserRole::where('userId', $id)->update([
                 'status' => false,
             ]);
 
@@ -1125,23 +1332,6 @@ class UserController extends Controller
                         'phone' => $userToDelete->phone,
                         'profilePhoto' => $userToDelete->profilePhoto,
                         'status' => $userToDelete->status, 
-                    ],
-                    'user_role_info' => [
-                        'id' => $userRoleToDelete->id,
-                        'roleId' => $userRoleToDelete->roleId,
-                        'status' => $userRoleToDelete->status,
-                        'createdBy' => $userRoleToDelete->createdBy
-                    ],
-                    'deleted_by' => [
-                        'id' => $authenticatedUser->id,
-                        'name' => $authenticatedUser->firstName . ' ' . $authenticatedUser->lastName,
-                        'email' => $authenticatedUser->email,
-                        'role' => $authenticatedUserRole ? $authenticatedUserRole->roleId : null
-                    ],
-                    'deletion_info' => [
-                        'previous_status' => true,
-                        'new_status' => false,
-                        'deleted_at' => now()
                     ]
                 ],
                 'timestamp' => now(),

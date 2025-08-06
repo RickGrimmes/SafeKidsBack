@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('api1')->group(function () {
     
-    // USERS
+    #region USERS
     Route::post('users/login', [UserController::class, 'login']);
     Route::post('users/reset-password', [UserController::class, 'resetPassword']);
     Route::post('users/verify-2fa', [UserController::class, 'verify2FA']);
@@ -31,52 +31,63 @@ Route::prefix('api1')->group(function () {
     Route::post('users/change-password', [UserController::class, 'changePassword']);
     Route::post('users/refresh-token', [UserController::class, 'refreshToken']);
     Route::post('users/resend-2fa', [UserController::class, 'resend2FA']);
+    #endregion
 
-    // GUARDIANS
+    #region GUARDIANS
     Route::post('guardians/login', [GuardianController::class, 'login']);
     Route::post('guardians/reset-password', [GuardianController::class, 'resetPassword']);
     Route::post('guardians/verify-2fa', [GuardianController::class, 'verify2FA']);
+    Route::post('guardians/password-challenge', [GuardianController::class, 'passwordChallenge']);
+    Route::post('guardians/change-password', [GuardianController::class, 'changePassword']);
     // EL VERIFY2FA TE DEVUELVE AL USUARIO CON SU TOKEN Y LOS DATOS DE LA ESCUELA EN LA QUE ESTÁ ASOCIADO, EL OBJETO SE LLAMA SCHOOL, SALDRÁ NULL SI NO ESTÁ ENLAZADO A ALGUNA ESCUELA POR LO QUE SI TE SALE NULL, PRIMERO CHECA QUE ESTE TENGA UNA RELACIÓN A ALGUNA ESCUELA EXISTENTE
     Route::post('guardians/refresh-token', [GuardianController::class, 'refreshToken']);
+    Route::post('guardians/resend-2fa', [GuardianController::class, 'resend2FA']);
+    #endregion
 
     Route::middleware('jwt.auth')->group(function () 
     {
-        // USERS
-        Route::post('users/register', [UserController::class, 'register']);
+        #region USERS
+        Route::post('users/register', [UserController::class, 'register']); // para crear usuarios que no sean tipo dueño
+        Route::post('users/register-owner', [UserController::class, 'registerOwner']); //para usuarios tipo dueño nada mas
         Route::get('users/type/{type}', [UserController::class, 'index']); 
         Route::post('users/logout', [UserController::class, 'logout']);
-        Route::get('users/my-directors', [UserController::class, 'myDirectors']);
+        Route::get('users/my-directors', [UserController::class, 'myDirectors']); // trae a los directores que he creado, que están en status 1 y que no tengan escuelas en las que ya estén metidos
         Route::get('users/my-profile', [UserController::class, 'myProfile']);
         Route::put('users/edit/{id}', [UserController::class, 'edit']);
         Route::delete('users/delete/{id}', [UserController::class, 'delete']);
         Route::post('users/new-password', [UserController::class, 'newPassword']);
+        #endregion
 
-        // SCHOOLS
+        #region SCHOOLS
         Route::get('schools', [SchoolController::class, 'index']);
         Route::get('schools/{id}', [SchoolController::class, 'show']);
         Route::post('schools/create', [SchoolController::class, 'create']);
         Route::put('schools/edit/{id}', [SchoolController::class, 'edit']);
         Route::delete('schools/delete/{id}', [SchoolController::class, 'delete']);
+        #endregion
 
-        // STUDENTS
+        #region STUDENTS
         Route::get('students/{id}', [StudentController::class, 'show']);
         Route::get('students/seek-school/{schoolId}/{filter}', [StudentController::class, 'index']);
         Route::put('students/edit-group/{studentId}', [StudentController::class, 'editGroup']);
         Route::delete('students/delete/{id}', [StudentController::class, 'delete']);
         Route::post('students/create/{schoolId}', [StudentController::class, 'create']);
+        #endregion
 
-        //GROUPS
+        #region GROUPS
         Route::get('groups/{schoolId}', [GroupController::class, 'index']);
+        #endregion
 
-        // AUTHORIZEDPEOPLES
+        #region AUTHORIZEDPEOPLES
         Route::post('authPeoples/{studentId}', [AuthorizedPeopleController::class, 'create']);
         Route::get('authPeoples/{id}', [AuthorizedPeopleController::class, 'show']);
         Route::put('authPeoples/{id}', [AuthorizedPeopleController::class, 'edit']);
         Route::delete('authPeoples/{id}', [AuthorizedPeopleController::class, 'delete']);
         Route::get('authPeoples/my-authorizeds/{studentId}', [AuthorizedPeopleController::class, 'myAuthorizeds']);
         Route::get('authPeoples/students/{schoolId}', [AuthorizedPeopleController::class, 'index']);
+        #endregion
 
-        // GUARDIANS
+        #region GUARDIANS
         Route::get('guardians/my-profile', [GuardianController::class, 'myProfile']);
         Route::post('guardians/register/{schoolId}', [GuardianController::class, 'register']);
         Route::post('guardians/logout', [GuardianController::class, 'logout']);
@@ -88,17 +99,14 @@ Route::prefix('api1')->group(function () {
         //Route::get('guardians/my-guardians', [GuardianController::class, 'myGuardians']); ESTA CREO QUE NO
         Route::get('guardians/all/{studentId}', [GuardianController::class, 'guardiansList']); 
         Route::get('guardians/my-kids', [GuardianController::class, 'myKids']); //para obtener a los hijos del tutor
+        #endregion
 
         // PARA LA CÁMARA
         // PARA GUARDAR LAS IMÁGENES DEBE DE USAR TANTO LOS MÉTODOS DE CREAR Y REGISTRAR DE AQUÍ, COMO LOS DE PYTHON, LARAVEL SOLO CAPTURA LOS DATOS Y PYTHON LA IMAGEN PARA GUARDARLA EN EL DISCO
-        // PARA LA ENTRADA, ESTE IGUAL ENVIA LA IMAGEN DESDE PYTHON, ESTE YA PROCESA Y BUSCA, RETORNA ALGO, DEBO DECIRLE QUE SI ENCUENTRA PUES QUE ENVÍE LA NOTIFICACIÓN
     });
     
     
-    // NOTIFICACIONES
-
-    //VER LAS NOTIFICACIONES
-
+    #region NOTIFICACIONES
     Route::prefix('entrada')->group(function () {
         Route::post('check-in', [NotificationController::class, 'checkIn']);
     });
@@ -106,4 +114,8 @@ Route::prefix('api1')->group(function () {
     Route::prefix('salida')->group(function () {
         Route::get('check-out', [NotificationController::class, 'checkOut']);
     });
+
+        // NOTIFICACIONES
+        Route::get('notifications/my-notifications/{studentId}/{dayFilter}', [NotificationController::class, 'myNotifications']);
+    #endregion
 });

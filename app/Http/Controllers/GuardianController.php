@@ -350,6 +350,224 @@ class GuardianController extends Controller
         }
     }
 
+    public function passwordChallenge(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'code' => 'required|string|size:6',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El código de 6 dígitos es obligatorio',
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El código de 6 dígitos es obligatorio',
+                'timestamp' => now(),
+            ], 400);
+        }
+
+        $guardian = Guardians::where('2facode', $request->code)->first();
+
+        if (!$guardian) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Código inválido o expirado',
+                'timestamp' => now(),
+            ], 400);
+        }
+
+        $temporaryToken = base64_encode(json_encode([
+            'user_id' => $guardian->id,
+            'email' => $guardian->email,
+            'purpose' => 'password_reset',
+            'expires_at' => now()->addMinutes(15)->timestamp,
+            'verification_code' => $request->code
+        ]));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Código verificado correctamente',
+            'data' => [
+                'user_id' => $guardian->id,
+                'email' => $guardian->email,
+                'firstName' => $guardian->firstName,
+                'lastName' => $guardian->lastName
+            ],
+            'resetToken' => $temporaryToken,
+            'timestamp' => now(),
+        ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al verificar código: ' . $e->getMessage(),
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+
+    public function changePassword(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'resetToken' => 'required|string',
+                'password' => 'required|string|min:8',
+            ]);
+
+            if ($validator->fails()) {
+                $errors = $validator->errors();
+                if ($errors->has('password')) {
+                    $msg = 'La nueva contraseña es obligatoria y debe tener mínimo 8 caracteres.';
+                } elseif ($errors->has('resetToken')) {
+                    $msg = 'Token de reset es obligatorio.';
+                } else {
+                    $msg = 'Datos inválidos.';
+                }
+                return response()->json([
+                    'success' => false,
+                    'message' => $msg,
+                    'errors' => $errors,
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            // Decodificar y validar el token temporal
+            $tokenData = json_decode(base64_decode($request->resetToken), true);
+
+            if (!$tokenData || !isset($tokenData['guardian_id'], $tokenData['expires_at'], $tokenData['purpose'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Token de reset inválido',
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            // Verificar que el token sea para reset de contraseña
+            if ($tokenData['purpose'] !== 'password_reset') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Token no válido para cambio de contraseña',
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            // Verificar que el token no haya expirado
+            if (now()->timestamp > $tokenData['expires_at']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Token de reset ha expirado',
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            // Buscar el usuario
+            $guardian = Guardians::find($tokenData['guardian_id']);
+
+            if (!$guardian) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado',
+                    'timestamp' => now(),
+                ], 404);
+            }
+
+            // Validar que el código de verificación aún coincida (seguridad extra)
+            if (isset($tokenData['verification_code']) && $guardian->{'2facode'} !== $tokenData['verification_code']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Token de reset inválido o ya utilizado',
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            // Actualizar la contraseña y limpiar el código 2FA
+            $guardian->update([
+                'password' => Hash::make($request->password),
+                '2facode' => null 
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Contraseña actualizada exitosamente',
+                'data' => [
+                    'guardian_id' => $guardian->id,
+                    'email' => $guardian->email,
+                    'firstName' => $guardian->firstName,
+                    'lastName' => $guardian->lastName,
+                    'password_changed_at' => now()
+                ],
+                'timestamp' => now(),
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cambiar contraseña: ' . $e->getMessage(),
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+
+    public function resend2fa(Request $request) 
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'temporaryToken' => 'required|string',
+            ]);
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El token temporal es obligatorio',
+                    'timestamp' => now(),
+                ], 400);
+            }
+            $tokenData = json_decode(base64_decode($request->temporaryToken), true);
+            if (!$tokenData || !isset($tokenData['email'], $tokenData['expires_at'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Token temporal inválido',
+                    'timestamp' => now(),
+                ], 400);
+            }
+            if (now()->timestamp > $tokenData['expires_at']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El token temporal ha expirado',
+                    'timestamp' => now(),
+                ], 400);
+            }
+            $guardian = Guardians::where('email', $tokenData['email'])->first();
+            if (!$guardian) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado',
+                    'timestamp' => now(),
+                ], 404);
+            }
+            $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+            $guardian->update(['2facode' => $code]);
+            Mail::to($guardian->email)->send(new TwoFactorAuthMail($guardian, $code));
+            return response()->json([
+                'success' => true,
+                'message' => 'Código de 2FA reenviado con éxito',
+                'timestamp' => now(),
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Server failed',
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+
     public function logout(Request $request)
     {
         try {

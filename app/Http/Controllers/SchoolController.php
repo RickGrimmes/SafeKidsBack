@@ -389,20 +389,6 @@ class SchoolController extends Controller
                             'school_user_id' => $ownerSchoolUser->id
                         ],
                         'assigned_director' => $assignedDirector,
-                        'school_users_created' => [
-                            'owner_record' => [
-                                'id' => $ownerSchoolUser->id,
-                                'schoolId' => $ownerSchoolUser->schoolId,
-                                'userRoleId' => $ownerSchoolUser->userRoleId,
-                                'role' => 'owner'
-                            ],
-                            'director_record' => $directorSchoolUser ? [
-                                'id' => $directorSchoolUser->id,
-                                'schoolId' => $directorSchoolUser->schoolId,
-                                'userRoleId' => $directorSchoolUser->userRoleId,
-                                'role' => 'director'
-                            ] : null
-                        ]
                     ],
                     'timestamp' => now(),
                 ], 201);
@@ -485,6 +471,7 @@ class SchoolController extends Controller
                 'city' => 'sometimes|string|max:50',
                 'school_types' => 'sometimes|array|min:1|max:3',
                 'school_types.*' => 'required_with:school_types|integer|in:1,2,3',
+                'director_id' => 'sometimes|integer|exists:users,id', 
             ]);
 
             if ($validator->fails()) {
@@ -519,6 +506,28 @@ class SchoolController extends Controller
                             'schoolId' => $school->id,
                             'type' => $typeMapping[$typeNumber]
                         ]);
+                    }
+                }
+
+                if ($request->has('director_id')) {
+                    $directorUserRole = UserRole::where('userId', $request->director_id)->first();
+
+                    if ($directorUserRole) {
+                        // Buscar en school_users el registro con ese userRoleId y schoolId
+                        $directorSchoolUser = SchoolUsers::where('schoolId', $school->id)
+                            ->where('userRoleId', $directorUserRole->id)
+                            ->first();
+
+                        // Guardar el id para después
+                        $directorSchoolUserId = $directorSchoolUser ? $directorSchoolUser->id : null;
+                    } else {
+                        // Si no existe es que el director es nuevo, busca el primer registro de school_users con ese schoolId
+                        $schoolUserToUpdate = SchoolUsers::where('schoolId', $school->id)->first();
+
+                        if ($schoolUserToUpdate) {
+                            $schoolUserToUpdate->userRoleId = $request->director_id;
+                            $schoolUserToUpdate->save();
+                        }
                     }
                 }
 

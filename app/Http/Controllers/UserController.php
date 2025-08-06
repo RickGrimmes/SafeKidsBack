@@ -1125,14 +1125,24 @@ class UserController extends Controller
                 ], 403);
             }
 
+            $schoolUser = SchoolUsers::where('userRoleId', $userRole->id)->first();
+            $schoolId = $schoolUser ? $schoolUser->schoolId : null;
+
+            // Construir IMG_ROUTE
+            $roleNameUpper = strtoupper($userRole->role->name ?? "Rol {$userRole->roleId}");
+            $profilePhoto = $user->profilePhoto;
+            $imgRoute = $schoolId . '/' . $roleNameUpper . '/' . $profilePhoto;
+
             return response()->json([
                 'success' => true,
                 'message' => 'Perfil del usuario obtenido exitosamente',
                 'data' => $user->makeHidden(['password', '2facode', 'created_at']),
                 'role_info' => [
                     'id' => $userRole->roleId,
-                    'name' => $userRole->role->name ?? "Rol {$userRole->roleId}"
+                    'name' => $roleNameUpper
                 ],
+                'school_id' => $schoolId,
+                'img_route' => $imgRoute,
                 'timestamp' => now(),
             ], 200);
 

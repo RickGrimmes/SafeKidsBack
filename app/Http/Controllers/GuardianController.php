@@ -1028,10 +1028,18 @@ class GuardianController extends Controller
                 ->where('status', true)
                 ->get();
 
+            $guardiansWithSchool = $guardians->map(function ($guardian) {
+                $schoolId = GuardiansSchool::where('guardian_id', $guardian->id)->value('school_id');
+                $data = $guardian->makeHidden(['password', '2facode', 'created_at']);
+                $data['school_id'] = $schoolId;
+                $data['img_route'] = $schoolId . '/GUARDIANS/' . $guardian->photo;
+                return $data;
+            });
+
             return response()->json([
                 'success' => true,
                 'message' => 'Tutores relacionados encontrados exitosamente',
-                'data' => $guardians->makeHidden(['password', '2facode', 'created_at']),
+                'data' => $guardiansWithSchool,
                 'timestamp' => now(),
             ], 200);
         } catch (\Exception $e) {

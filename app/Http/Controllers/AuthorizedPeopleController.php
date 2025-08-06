@@ -146,19 +146,28 @@ class AuthorizedPeopleController extends Controller
 
     public function myAuthorizeds($studentId)
     {
+        $group = Groups::where('studentId', $studentId)->first();
+        $schoolId = $group ? $group->schoolId : null;
+
         $authorizedIds = StudentAuthorized::where('studentId', $studentId)
             ->pluck('authorizedId')
             ->toArray();
 
-        // Obtener solo las personas autorizadas activas relacionadas con ese estudiante
         $authorizedPeoples = AuthorizedPeople::whereIn('id', $authorizedIds)
             ->where('status', true)
             ->get();
 
+        $authorizedWithExtras = $authorizedPeoples->map(function ($authPerson) use ($schoolId) {
+            $data = $authPerson->makeHidden(['created_at']);
+            $data['school_id'] = $schoolId;
+            $data['img_route'] = $schoolId . '/AUTHORIZEDS/' . $authPerson->photo;
+            return $data;
+        });
+
         return response()->json([
             'success' => true,
             'message' => 'Personas autorizadas del estudiante encontradas',
-            'data' => $authorizedPeoples,
+            'data' => $authorizedWithExtras,
             'timestamp' => now(),
         ]);
     }

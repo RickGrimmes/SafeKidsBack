@@ -239,6 +239,7 @@ class GuardianController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Email de restablecimiento de contraseña enviado',
+                'data' => $guardian->email,
                 'timestamp' => now(),
             ], 200);
         }

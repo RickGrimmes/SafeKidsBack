@@ -536,6 +536,7 @@ class UserController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Correo de restablecimiento de contraseña enviado',
+                'data' => $user->email,
                 'timestamp' => now(),
             ], 200);
         }

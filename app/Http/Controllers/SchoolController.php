@@ -692,5 +692,70 @@ class SchoolController extends Controller
         }
     }
 
+    public function mySchools()
+    {
+        try {
+            $authenticatedUser = JWTAuth::parseToken()->authenticate();
+
+            if (!$authenticatedUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado en el token',
+                    'timestamp' => now(),
+                ], 401);
+            }
+
+            $userRole = UserRole::where('userId', $authenticatedUser->id)->first();
+            if (!$userRole || $userRole->roleId != 2) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Solo los dueños pueden consultar sus escuelas',
+                    'timestamp' => now(),
+                ], 403);
+            }
+
+            // Buscar todas las escuelas activas donde el dueño es el único registro en school_users
+            $schoolUserIds = SchoolUsers::where('userRoleId', $userRole->id)
+                ->pluck('schoolId')
+                ->toArray();
+
+            // Filtrar solo las escuelas donde solo hay un registro en school_users (solo el dueño)
+            $schools = Schools::whereIn('id', $schoolUserIds)
+                ->where('status', true)
+                ->get()
+                ->filter(function ($school) {
+                    return SchoolUsers::where('schoolId', $school->id)->count() === 1;
+                })
+                ->values();
+
+            $schoolsData = $schools->map(function ($school) {
+                return [
+                    'id' => $school->id,
+                    'name' => $school->name,
+                    'address' => $school->address,
+                    'phone' => $school->phone,
+                    'city' => $school->city,
+                    'status' => $school->status,
+                    'created_at' => $school->created_at
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Escuelas activas sin director encontradas exitosamente',
+                'data' => $schoolsData,
+                'total_schools' => $schools->count(),
+                'timestamp' => now(),
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al consultar tus escuelas: ' . $e->getMessage(),
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+
     // public function revive($id) algo para poder revivir a la escuela eliminada quizá?
 }

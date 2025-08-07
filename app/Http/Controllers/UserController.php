@@ -33,6 +33,7 @@ class UserController extends Controller
                 'email' => 'required|email|unique:users,email',
                 'profilePhoto' => 'required|image|mimes:jpg,jpeg,png|max:2048',
                 'password' => 'required|string|min:8',
+                'school_id' => 'sometimes|integer|exists:schools,id',
             ]);
             
             if ($validator->fails()) {
@@ -121,12 +122,20 @@ class UserController extends Controller
                 $user->save();
             }
 
-            UserRole::create([
+            $userRole = UserRole::create([
                 'userId' => $user->id,
                 'roleId' => $newUserRoleId,
                 'status' => true,
                 'createdBy' => $creatorId,
             ]);
+
+            // Si es director y viene school_id, crear registro en school_users
+            if ($newUserRoleId == 3 && $request->has('school_id')) {
+                SchoolUsers::create([
+                    'schoolId' => $request->school_id,
+                    'userRoleId' => $userRole->id
+                ]);
+            }
     
             $creatorRole = UserRole::where('userId', $creatorId)->first();
 

@@ -65,6 +65,7 @@ Route::prefix('api1')->group(function () {
         Route::post('schools/create', [SchoolController::class, 'create']);
         Route::put('schools/edit/{id}', [SchoolController::class, 'edit']);
         Route::delete('schools/delete/{id}', [SchoolController::class, 'delete']);
+        Route::get('schools/my-schools', [SchoolController::class, 'mySchools']); // para que el usuario obtenga las escuelas que ha creado pero solo las que no tengan directores y su status es true, método auxiliar para crear director
         #endregion
 
         #region STUDENTS

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AuthorizedPeople;
 use App\Models\Groups;
+use App\Models\Schools;
 use App\Models\StudentAuthorized;
 use App\Models\Students;
 use Illuminate\Http\Request;
@@ -135,11 +136,36 @@ class AuthorizedPeopleController extends Controller
             ], 404);
         }
 
+        $studentAuthorized = StudentAuthorized::where('authorizedId', $authPerson->id)->first();
+        $schoolInfo = null;
+        if ($studentAuthorized) {
+            $group = Groups::where('studentId', $studentAuthorized->studentId)->first();
+            if ($group) {
+                $school = Schools::find($group->schoolId);
+                if ($school) {
+                    $schoolInfo = [
+                        'id' => $school->id,
+                        'name' => $school->name,
+                        'address' => $school->address,
+                        'phone' => $school->phone,
+                        'city' => $school->city,
+                        'status' => $school->status
+                    ];
+                }
+            }
+        }
+
         $authPerson->update(['status' => false]);
 
         return response()->json([
             'success' => true,
             'message' => 'Persona autorizada eliminada correctamente',
+            'data' => [
+                'authorized_id' => $authPerson->id,
+                'status' => $authPerson->status,
+                'role_type' => 'AUTHORIZED_PEOPLE',
+                'school' => $schoolInfo
+            ],
             'timestamp' => now(),
         ]);
     }

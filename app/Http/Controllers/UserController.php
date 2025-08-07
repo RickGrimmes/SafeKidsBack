@@ -1300,12 +1300,27 @@ class UserController extends Controller
                 ], 403);
             }
 
-            // NUEVO BLOQUE: Validar si tiene asignación en school_users
-            $schoolUserExists = SchoolUsers::where('userRoleId', $userRoleToDelete->id)->exists();
-            if ($schoolUserExists) {
+            $schoolUser = SchoolUsers::where('userRoleId', $userRoleToDelete->id)->first();
+            $schoolInfo = null;
+            if ($schoolUser) {
+                $school = Schools::find($schoolUser->schoolId);
+                if ($school) {
+                    $schoolInfo = [
+                        'id' => $school->id,
+                        'name' => $school->name,
+                        'address' => $school->address,
+                        'phone' => $school->phone,
+                        'city' => $school->city,
+                        'status' => $school->status
+                    ];
+                }
+            }
+
+            if ($schoolUser) {
                 return response()->json([
                     'success' => false,
                     'message' => 'No se puede eliminar este usuario porque está asignado a una escuela.',
+                    'school' => $schoolInfo,
                     'timestamp' => now(),
                 ], 400);
             }
@@ -1328,6 +1343,8 @@ class UserController extends Controller
                 'status' => false,
             ]);
 
+            $roleType = $userRoleToDelete->role ? $userRoleToDelete->role->name : "Rol " . $userRoleToDelete->roleId;
+
             return response()->json([
                 'success' => true,
                 'message' => 'Usuario eliminado (inactivado) exitosamente',
@@ -1339,8 +1356,10 @@ class UserController extends Controller
                         'email' => $userToDelete->email,
                         'phone' => $userToDelete->phone,
                         'profilePhoto' => $userToDelete->profilePhoto,
-                        'status' => $userToDelete->status, 
-                    ]
+                        'status' => $userToDelete->status,
+                        'role_type' => $roleType
+                    ],
+                    'school' => $schoolInfo 
                 ],
                 'timestamp' => now(),
             ], 200);

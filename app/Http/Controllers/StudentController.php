@@ -247,6 +247,23 @@ class StudentController extends Controller
         try {
             $student = Students::findOrFail($id);
 
+            // Buscar la escuela en la que está el estudiante
+            $group = Groups::where('studentId', $student->id)->first();
+            $schoolInfo = null;
+            if ($group) {
+                $school = Schools::find($group->schoolId);
+                if ($school) {
+                    $schoolInfo = [
+                        'id' => $school->id,
+                        'name' => $school->name,
+                        'address' => $school->address,
+                        'phone' => $school->phone,
+                        'city' => $school->city,
+                        'status' => $school->status
+                    ];
+                }
+            }
+
             $student->update(['status' => false]);
 
             return response()->json([
@@ -255,6 +272,8 @@ class StudentController extends Controller
                 'data' => [
                     'student_id' => $student->id,
                     'status' => $student->status,
+                    'role_type' => 'STUDENTS',
+                    'school' => $schoolInfo
                 ],
                 'timestamp' => now(),
             ], 200);

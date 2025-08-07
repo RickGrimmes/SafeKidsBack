@@ -825,6 +825,26 @@ class GuardianController extends Controller
         try {
             $guardian = Guardians::findOrFail($id);
 
+            // Buscar el estudiante relacionado
+            $studentGuardian = StudentGuardian::where('guardianId', $guardian->id)->first();
+            $schoolInfo = null;
+            if ($studentGuardian) {
+                $group = Groups::where('studentId', $studentGuardian->studentId)->first();
+                if ($group) {
+                    $school = Schools::find($group->schoolId);
+                    if ($school) {
+                        $schoolInfo = [
+                            'id' => $school->id,
+                            'name' => $school->name,
+                            'address' => $school->address,
+                            'phone' => $school->phone,
+                            'city' => $school->city,
+                            'status' => $school->status
+                        ];
+                    }
+                }
+            }
+
             $guardian->update(['status' => false]);
 
             return response()->json([
@@ -833,6 +853,8 @@ class GuardianController extends Controller
                 'data' => [
                     'guardian_id' => $guardian->id,
                     'status' => $guardian->status,
+                    'role_type' => 'GUARDIANS',
+                    'school' => $schoolInfo
                 ],
                 'timestamp' => now(),
             ], 200);

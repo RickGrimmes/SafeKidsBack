@@ -82,7 +82,7 @@ Route::prefix('api1')->group(function () {
 
         #region AUTHORIZEDPEOPLES
         Route::get('authPeoples/my-authorizeds/{studentId}', [AuthorizedPeopleController::class, 'myAuthorizeds']);
-        Route::post('authPeoples/create/{studentId}', [AuthorizedPeopleController::class, 'create']);
+        Route::post('authPeoples/create', [AuthorizedPeopleController::class, 'create']);
         Route::get('authPeoples/show/{id}', [AuthorizedPeopleController::class, 'show']);
         Route::put('authPeoples/edit/{id}', [AuthorizedPeopleController::class, 'edit']);
         Route::delete('authPeoples/delete/{id}', [AuthorizedPeopleController::class, 'delete']);

@@ -50,30 +50,30 @@ Route::prefix('api1')->group(function () {
         #region USERS
         Route::post('users/register', [UserController::class, 'register']); // para crear usuarios que no sean tipo dueño
         Route::post('users/register-owner', [UserController::class, 'registerOwner']); //para usuarios tipo dueño nada mas
-        Route::get('users/type/{type}', [UserController::class, 'index']); 
         Route::post('users/logout', [UserController::class, 'logout']);
         Route::get('users/my-directors', [UserController::class, 'myDirectors']); // trae a los directores que he creado, que están en status 1 y que no tengan escuelas en las que ya estén metidos
         Route::get('users/my-profile', [UserController::class, 'myProfile']);
+        Route::post('users/new-password', [UserController::class, 'newPassword']);
+        Route::get('users/type/{type}', [UserController::class, 'index']); 
         Route::put('users/edit/{id}', [UserController::class, 'edit']);
         Route::delete('users/delete/{id}', [UserController::class, 'delete']);
-        Route::post('users/new-password', [UserController::class, 'newPassword']);
         #endregion
 
         #region SCHOOLS
         Route::get('schools', [SchoolController::class, 'index']);
-        Route::get('schools/{id}', [SchoolController::class, 'show']);
         Route::post('schools/create', [SchoolController::class, 'create']);
+        Route::get('schools/my-schools', [SchoolController::class, 'mySchools']); // para que el usuario obtenga las escuelas que ha creado pero solo las que no tengan directores y su status es true, método auxiliar para crear director
         Route::put('schools/edit/{id}', [SchoolController::class, 'edit']);
         Route::delete('schools/delete/{id}', [SchoolController::class, 'delete']);
-        Route::get('schools/my-schools', [SchoolController::class, 'mySchools']); // para que el usuario obtenga las escuelas que ha creado pero solo las que no tengan directores y su status es true, método auxiliar para crear director
+        Route::get('schools/{id}', [SchoolController::class, 'show']);
         #endregion
 
         #region STUDENTS
-        Route::get('students/{id}', [StudentController::class, 'show']);
         Route::get('students/seek-school/{schoolId}/{filter}', [StudentController::class, 'index']);
         Route::put('students/edit-group/{studentId}', [StudentController::class, 'editGroup']);
         Route::delete('students/delete/{id}', [StudentController::class, 'delete']);
         Route::post('students/create/{schoolId}', [StudentController::class, 'create']);
+        Route::get('students/{id}', [StudentController::class, 'show']);
         #endregion
 
         #region GROUPS
@@ -81,26 +81,26 @@ Route::prefix('api1')->group(function () {
         #endregion
 
         #region AUTHORIZEDPEOPLES
-        Route::post('authPeoples', [AuthorizedPeopleController::class, 'create']);
-        Route::get('authPeoples/{id}', [AuthorizedPeopleController::class, 'show']);
-        Route::put('authPeoples/{id}', [AuthorizedPeopleController::class, 'edit']);
-        Route::delete('authPeoples/{id}', [AuthorizedPeopleController::class, 'delete']);
         Route::get('authPeoples/my-authorizeds/{studentId}', [AuthorizedPeopleController::class, 'myAuthorizeds']);
+        Route::post('authPeoples/create', [AuthorizedPeopleController::class, 'create']);
+        Route::get('authPeoples/show/{id}', [AuthorizedPeopleController::class, 'show']);
+        Route::put('authPeoples/edit/{id}', [AuthorizedPeopleController::class, 'edit']);
+        Route::delete('authPeoples/delete/{id}', [AuthorizedPeopleController::class, 'delete']);
         Route::get('authPeoples/{schoolId}/{studentId}', [AuthorizedPeopleController::class, 'index']);
         #endregion
 
         #region GUARDIANS
         Route::get('guardians/my-profile', [GuardianController::class, 'myProfile']);
+        Route::get('guardians/my-guardians', [GuardianController::class, 'myGuardians']); // para ver a los demás tutores aparte de yo tutor, para vista móvil
+        Route::get('guardians/my-kids', [GuardianController::class, 'myKids']); //para obtener a los hijos del tutor, sirve también para el filtro de mis hijos en notificaciones
         Route::post('guardians/register/{schoolId}', [GuardianController::class, 'register']);
         Route::post('guardians/logout', [GuardianController::class, 'logout']);
+        Route::post('guardians/new-password', [GuardianController::class, 'newPassword']);
+        Route::get('guardians/all/{studentId}', [GuardianController::class, 'guardiansList']);
         Route::get('guardians/{id}', [GuardianController::class, 'show']);
-        Route::get('guardians/{schoolId}/{studentId}', [GuardianController::class, 'index']);
         Route::put('guardians/edit/{id}', [GuardianController::class, 'edit']);
         Route::delete('guardians/delete/{id}', [GuardianController::class, 'delete']);
-        Route::post('guardians/new-password', [GuardianController::class, 'newPassword']);
-        Route::get('guardians/my-guardians', [GuardianController::class, 'myGuardians']); // para ver a los demás tutores aparte de yo tutor, para vista móvil
-        Route::get('guardians/all/{studentId}', [GuardianController::class, 'guardiansList']); 
-        Route::get('guardians/my-kids', [GuardianController::class, 'myKids']); //para obtener a los hijos del tutor, sirve también para el filtro de mis hijos en notificaciones
+        Route::get('guardians/{schoolId}/{studentId}', [GuardianController::class, 'index']);
         #endregion
 
         #region NOTIFICATIONS

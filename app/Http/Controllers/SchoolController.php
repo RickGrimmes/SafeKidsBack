@@ -696,7 +696,7 @@ class SchoolController extends Controller
     {
         try {
             $authenticatedUser = JWTAuth::parseToken()->authenticate();
-
+            
             if (!$authenticatedUser) {
                 return response()->json([
                     'success' => false,
@@ -706,29 +706,67 @@ class SchoolController extends Controller
             }
 
             $userRole = UserRole::where('userId', $authenticatedUser->id)->first();
-            if (!$userRole || $userRole->roleId != 2) {
+            
+            if (!$userRole || !in_array($userRole->roleId, [2])) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Solo los dueños pueden consultar sus escuelas',
+                    'message' => 'No tienes permisos para ver las escuelas',
                     'timestamp' => now(),
                 ], 403);
             }
 
-            // Buscar todas las escuelas activas donde el dueño es el único registro en school_users
-            $schoolUserIds = SchoolUsers::where('userRoleId', $userRole->id)
-                ->pluck('schoolId')
-                ->toArray();
-
-            // Filtrar solo las escuelas donde solo hay un registro en school_users (solo el dueño)
-            $schools = Schools::whereIn('id', $schoolUserIds)
+            $schools = Schools::with(['schoolTypes', 'schoolUsers'])
                 ->where('status', true)
-                ->get()
-                ->filter(function ($school) {
-                    return SchoolUsers::where('schoolId', $school->id)->count() === 1;
+                ->whereHas('schoolUsers', function($query) use ($userRole) {
+                    $query->where('userRoleId', $userRole->id);
                 })
-                ->values();
+                ->get();
 
-            $schoolsData = $schools->map(function ($school) {
+            if ($schools->isEmpty()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'No has creado ninguna escuela aún',
+                    'data' => [],
+                    'user_info' => [
+                        'user_role_id' => $userRole->id,
+                        'user_id' => $authenticatedUser->id,
+                        'name' => $authenticatedUser->firstName . ' ' . $authenticatedUser->lastName
+                    ],
+                    'timestamp' => now(),
+                ], 200);
+            }
+
+            // Filtrar escuelas que solo tienen un registro en school_users (solo el dueño)
+            $filteredSchools = $schools->filter(function ($school) {
+                return $school->schoolUsers->count() === 1;
+            });
+
+            if ($filteredSchools->isEmpty()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'No tienes escuelas sin director asignado',
+                    'data' => [],
+                    'user_info' => [
+                        'user_role_id' => $userRole->id,
+                        'user_id' => $authenticatedUser->id,
+                        'name' => $authenticatedUser->firstName . ' ' . $authenticatedUser->lastName
+                    ],
+                    'timestamp' => now(),
+                ], 200);
+            }
+
+            $schoolsData = $filteredSchools->map(function ($school) use ($userRole) {
+                $types = $school->schoolTypes->map(function ($schoolType) {
+                    return [
+                        'id' => $schoolType->id,
+                        'type' => $schoolType->type,
+                        'type_name' => $this->getTypeName($schoolType->type)
+                    ];
+                });
+
+                // Encontrar el registro school_user correspondiente
+                $schoolUser = $school->schoolUsers->where('userRoleId', $userRole->id)->first();
+
                 return [
                     'id' => $school->id,
                     'name' => $school->name,
@@ -736,15 +774,29 @@ class SchoolController extends Controller
                     'phone' => $school->phone,
                     'city' => $school->city,
                     'status' => $school->status,
-                    'created_at' => $school->created_at
+                    'created_at' => $school->created_at,
+                    'school_types' => $types,
+                    'total_types' => $types->count(),
+                    'ownership_info' => [
+                        'school_user_id' => $schoolUser ? $schoolUser->id : null,
+                        'user_role_id' => $userRole->id,
+                        'is_owner' => true,
+                        'has_director' => false // Solo escuelas sin director
+                    ]
                 ];
             });
 
             return response()->json([
                 'success' => true,
-                'message' => 'Escuelas activas sin director encontradas exitosamente',
-                'data' => $schoolsData,
-                'total_schools' => $schools->count(),
+                'message' => 'Escuelas sin director encontradas exitosamente',
+                'data' => $schoolsData->values(), // Reindexar el array
+                'total_schools' => $filteredSchools->count(),
+                'user_info' => [
+                    'user_id' => $authenticatedUser->id,
+                    'user_role_id' => $userRole->id,
+                    'name' => $authenticatedUser->firstName . ' ' . $authenticatedUser->lastName,
+                    'role' => $userRole->roleId
+                ],
                 'timestamp' => now(),
             ], 200);
 

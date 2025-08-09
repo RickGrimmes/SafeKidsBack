@@ -825,39 +825,42 @@ class UserController extends Controller
     {
         try {
             $validator = Validator::make($request->all(), [
-                'code' => 'required|string|size:6',
+                'email' => 'required|email',
             ]);
+
             if ($validator->fails()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'El código de 6 dígitos es obligatorio',
+                    'message' => 'El correo es obligatorio y debe ser válido',
                     'timestamp' => now(),
                 ], 400);
             }
 
-            // Buscar al usuario por el código enviado
-            $user = User::where('2facode', $request->code)->first();
+            $user = User::where('email', $request->email)->first();
+
             if (!$user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Código inválido o expirado',
+                    'message' => 'Usuario no encontrado',
                     'timestamp' => now(),
                 ], 404);
             }
 
             $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
             $user->update(['2facode' => $code]);
+
             Mail::to($user->email)->send(new TwoFactorAuthMail($user, $code));
 
             return response()->json([
                 'success' => true,
-                'message' => 'Código de 2FA reenviado con éxito',
+                'message' => 'Código de autenticación reenviado al correo',
+                'data' => $user->email,
                 'timestamp' => now(),
             ], 200);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Server failed',
+                'message' => 'Error al reenviar código: ' . $e->getMessage(),
                 'timestamp' => now(),
             ], 500);
         }

@@ -542,22 +542,21 @@ class GuardianController extends Controller
     {
         try {
             $validator = Validator::make($request->all(), [
-                'code' => 'required|string|size:6',
+                'email' => 'required|email',
             ]);
             if ($validator->fails()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'El código de 6 dígitos es obligatorio',
+                    'message' => 'El email es obligatorio y debe ser válido',
                     'timestamp' => now(),
                 ], 400);
             }
 
-            // Buscar al tutor por el código enviado
-            $guardian = Guardians::where('2facode', $request->code)->first();
+            $guardian = Guardians::where('email', $request->email)->first();
             if (!$guardian) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Código inválido o expirado',
+                    'message' => 'Tutor no encontrado',
                     'timestamp' => now(),
                 ], 404);
             }
@@ -568,13 +567,14 @@ class GuardianController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Código de 2FA reenviado con éxito',
+                'message' => 'Código 2FA reenviado exitosamente',
+                'data' => $guardian->makeHidden(['password', '2facode', 'created_at']),
                 'timestamp' => now(),
             ], 200);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Server failed',
+                'message' => 'Error al reenviar el código 2FA: ' . $e->getMessage(),
                 'timestamp' => now(),
             ], 500);
         }

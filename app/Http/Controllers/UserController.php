@@ -280,18 +280,17 @@ class UserController extends Controller
 
     public function login(Request $request)
     {
-        try
+        try 
         {
             $validator = Validator::make($request->all(), [
                 'email' => 'required|email',
                 'password' => 'required|string|min:8',
             ]);
 
-            if ($validator->fails())
-            {
+            if ($validator->fails()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Falló la validación.',
+                    'message' => 'Fallo la validacion.',
                     'timestamp' => now(),
                 ], 400);
             }
@@ -303,9 +302,32 @@ class UserController extends Controller
                 if (!$user->status) {
                     return response()->json([
                         'success' => false,
-                        'message' => 'El usuario está inactivo',
+                        'message' => 'El usuario está inactivo.',
                         'timestamp' => now(),
                     ], 403);
+                }
+
+                $userAgent = $request->header('User-Agent');
+                $isMobile = preg_match('/Mobile|Android|iPhone|iPad|iPod/i', $userAgent);
+
+                $userRole = UserRole::where('userId', $user->id)->first();
+
+                if ($userRole) {
+                    if (($userRole->roleId == 2 && !$isMobile) || ($userRole->roleId == 3 && !$isMobile)) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Usuario no autorizado',
+                            'timestamp' => now(),
+                        ], 403);
+                    }
+
+                    if ($userRole->roleId == 4 && !$isMobile) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Usuario no autorizado',
+                            'timestamp' => now(),
+                        ], 403);
+                    }
                 }
 
                 $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
@@ -313,14 +335,14 @@ class UserController extends Controller
 
                 $temporaryToken = base64_encode(json_encode([
                     'email' => $user->email,
-                    'expires_at' => now()->addMinutes(15)->timestamp,
+                    'expires_at' => now()->addMinutes(15)->timestamp
                 ]));
 
                 Mail::to($user->email)->send(new TwoFactorAuthMail($user, $code));
 
                 return response()->json([
-                    'success' => true,
-                    'message' => 'Login exitoso, código de autenticación enviado al correo',
+                    'sucess' => true,
+                    'message' => 'Código de autenticación enviado al correo electrónico',
                     'data' => $user,
                     'temporaryToken' => $temporaryToken,
                     'timestamp' => now(),
@@ -330,7 +352,7 @@ class UserController extends Controller
             {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Credenciales inválidas',
+                    'message' => 'Credenciales incorrectas',
                     'timestamp' => now(),
                 ], 401);
             }

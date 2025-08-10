@@ -2,9 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AttendanceInfo;
+use App\Models\AuthorizedPeople;
+use App\Models\Groups;
+use App\Models\Guardians;
+use App\Models\GuardiansSchool;
 use App\Models\Schools;
 use App\Models\SchoolTypes;
 use App\Models\SchoolUsers;
+use App\Models\SentNotifications;
+use App\Models\StudentAuthorized;
+use App\Models\StudentGuardian;
+use App\Models\Students;
 use App\Models\UserRole;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -587,6 +596,7 @@ class SchoolController extends Controller
         }
     }
 
+    #actualmente el delete es de 103 líneas
     public function delete($id)
     {
         try {
@@ -640,10 +650,7 @@ class SchoolController extends Controller
                 ], 400);
             }
 
-            $school->update([
-                'status' => false,
-            ]);
-
+            // Obtener tipos de escuela antes de eliminar
             $schoolTypes = SchoolTypes::where('schoolId', $id)->get();
             $types = $schoolTypes->map(function ($schoolType) {
                 return [
@@ -653,35 +660,141 @@ class SchoolController extends Controller
                 ];
             });
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Escuela eliminada (inactivada) exitosamente',
-                'data' => [
-                    'deleted_school' => [
-                        'id' => $school->id,
-                        'name' => $school->name,
-                        'address' => $school->address,
-                        'phone' => $school->phone,
-                        'city' => $school->city,
-                        'status' => $school->status,
-                        'created_at' => $school->created_at,
-                        'school_types' => $types,
-                        'total_types' => $types->count(),
+            DB::beginTransaction();
+
+            try {
+                // 1. Obtener todos los userRoleId de school_users para esta escuela
+                $schoolUsers = SchoolUsers::where('schoolId', $id)->get();
+                $userRoleIds = $schoolUsers->pluck('userRoleId')->toArray();
+
+                // 2. Obtener los userId de los user_roles que vamos a inactivar
+                $userRolesToInactivate = UserRole::whereIn('id', $userRoleIds)->get();
+                $userIds = $userRolesToInactivate->pluck('userId')->toArray();
+
+                // 3. Obtener todos los studentId de los grupos de esta escuela antes de eliminar
+                $groupsFromSchool = Groups::where('schoolId', $id)->get();
+                $studentIds = $groupsFromSchool->pluck('studentId')->toArray();
+
+                // 4. Inactivar todos los estudiantes asociados a esta escuela
+                $affectedStudents = 0;
+                if (!empty($studentIds)) {
+                    $affectedStudents = Students::whereIn('id', $studentIds)->update(['status' => false]);
+                }
+
+                // 5. Eliminar registros de attendance_infos para estudiantes desactivados
+                $deletedAttendanceInfos = 0;
+                if (!empty($studentIds)) {
+                    $deletedAttendanceInfos = AttendanceInfo::whereIn('studentId', $studentIds)->count();
+                    AttendanceInfo::whereIn('studentId', $studentIds)->delete();
+                }
+
+                // 6. Eliminar registros de sent_notifications para estudiantes desactivados
+                $deletedSentNotifications = 0;
+                if (!empty($studentIds)) {
+                    $deletedSentNotifications = SentNotifications::whereIn('studentId', $studentIds)->count();
+                    SentNotifications::whereIn('studentId', $studentIds)->delete();
+                }
+
+                // 7. Procesar student_authorizeds y authorized_people
+                $affectedAuthorizedPeople = 0;
+                $deletedStudentAuthorizeds = 0;
+                if (!empty($studentIds)) {
+                    // Obtener todos los student_authorizeds que van a ser eliminados
+                    $studentAuthorizeds = StudentAuthorized::whereIn('studentId', $studentIds)->get();
+                    $authorizedIds = $studentAuthorizeds->pluck('authorizedId')->toArray();
+                    
+                    if (!empty($authorizedIds)) {
+                        // Cambiar status a false en authorized_people
+                        $affectedAuthorizedPeople = AuthorizedPeople::whereIn('id', $authorizedIds)
+                            ->update(['status' => false]);
+                    }
+                    
+                    // Eliminar registros de student_authorizeds
+                    $deletedStudentAuthorizeds = StudentAuthorized::whereIn('studentId', $studentIds)->count();
+                    StudentAuthorized::whereIn('studentId', $studentIds)->delete();
+                }
+
+                // 8. Contar y eliminar grupos de la escuela
+                $groupsCount = Groups::where('schoolId', $id)->count();
+                Groups::where('schoolId', $id)->delete();
+
+                // 9. Inactivar todos los user_roles asociados
+                UserRole::whereIn('id', $userRoleIds)->update(['status' => false]);
+
+                // 10. Inactivar todos los usuarios asociados
+                User::whereIn('id', $userIds)->update(['status' => false]);
+
+                // 11. Inactivar la escuela
+                $school->update([
+                    'status' => false,
+                ]);
+
+                // 12. Procesar student_guardians y guardians
+                $affectedGuardians = 0;
+                $deletedStudentGuardians = 0;
+                if (!empty($studentIds)) {
+                    // Obtener todos los student_guardians que van a ser eliminados
+                    $studentGuardians = StudentGuardian::whereIn('studentId', $studentIds)->get();
+                    $guardianIds = $studentGuardians->pluck('guardianId')->toArray();
+                    
+                    if (!empty($guardianIds)) {
+                        // Cambiar status a false en guardians
+                        $affectedGuardians = Guardians::whereIn('id', $guardianIds)
+                            ->update(['status' => false]);
+                    }
+                    
+                    // Eliminar registros de student_guardians
+                    $deletedStudentGuardians = StudentGuardian::whereIn('studentId', $studentIds)->count();
+                    StudentGuardian::whereIn('studentId', $studentIds)->delete();
+                }
+
+                // 13. Contar y eliminar registros de guardians_schools
+                $guardiansSchoolsCount = GuardiansSchool::where('school_id', $id)->count();
+                GuardiansSchool::where('school_id', $id)->delete();
+
+                // 14. ELIMINAR TODOS los registros de school_users para esta escuela
+                SchoolUsers::where('schoolId', $id)->delete();
+
+                DB::commit();
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Escuela eliminada exitosamente',
+                    'data' => [
+                        'deleted_school' => [
+                            'id' => $school->id,
+                            'name' => $school->name,
+                            'address' => $school->address,
+                            'phone' => $school->phone,
+                            'city' => $school->city,
+                            'status' => $school->status,
+                            'created_at' => $school->created_at,
+                            'school_types' => $types,
+                            'total_types' => $types->count(),
+                        ],
+                        'deleted_by' => [
+                            'user_id' => $authenticatedUser->id,
+                            'user_role_id' => $userRole->id,
+                            'name' => $authenticatedUser->firstName . ' ' . $authenticatedUser->lastName,
+                            'role' => $userRole->roleId
+                        ],
+                        'ownership_info' => [
+                            'school_user_id' => $schoolUser->id,
+                            'user_role_id' => $userRole->id,
+                            'was_owner' => true
+                        ]
                     ],
-                    'deleted_by' => [
-                        'user_id' => $authenticatedUser->id,
-                        'user_role_id' => $userRole->id,
-                        'name' => $authenticatedUser->firstName . ' ' . $authenticatedUser->lastName,
-                        'role' => $userRole->roleId
-                    ],
-                    'ownership_info' => [
-                        'school_user_id' => $schoolUser->id,
-                        'user_role_id' => $userRole->id,
-                        'was_owner' => true
-                    ]
-                ],
-                'timestamp' => now(),
-            ], 200);
+                    'timestamp' => now(),
+                ], 200);
+
+            } catch (\Exception $e) {
+                DB::rollback();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error al eliminar escuela: ' . $e->getMessage(),
+                    'timestamp' => now(),
+                ], 500);
+            }
 
         } catch (\Exception $e) {
             return response()->json([

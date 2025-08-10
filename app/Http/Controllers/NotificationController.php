@@ -18,7 +18,7 @@ use Tymon\JWTAuth\Facades\JWTAuth;
 
 class NotificationController extends Controller
 {
-   public function checkIn(Request $request)
+    public function checkIn(Request $request)
     {
         // Validar datos recibidos
         $request->validate([

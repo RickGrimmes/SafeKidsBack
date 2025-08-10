@@ -313,13 +313,15 @@ class UserController extends Controller
                 $userRole = UserRole::where('userId', $user->id)->first();
 
                 if ($userRole) {
-                    if (($userRole->roleId == 2 && !$isMobile) || ($userRole->roleId == 3 && !$isMobile)) {
+
+                  if (!in_array($userRole->roleId, [2, 3])) {
                         return response()->json([
                             'success' => false,
                             'message' => 'Usuario no autorizado',
                             'timestamp' => now(),
                         ], 403);
                     }
+
 
                     if ($userRole->roleId == 4 && !$isMobile) {
                         return response()->json([

@@ -19,7 +19,7 @@ use Tymon\JWTAuth\Facades\JWTAuth;
 class NotificationController extends Controller
 {
     public function checkIn(Request $request)
-    {
+    { 
         // Validar datos recibidos
         $request->validate([
             'archivo' => 'required|string',

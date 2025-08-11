@@ -18,6 +18,7 @@ use App\Models\UserRole;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
@@ -397,7 +398,7 @@ class SchoolController extends Controller
                             'role' => $userRole->roleId,
                             'school_user_id' => $ownerSchoolUser->id
                         ],
-                        'assigned_director' => $assignedDirector,
+                        'assigned_director' => $assignedDirector
                     ],
                     'timestamp' => now(),
                 ], 201);
@@ -427,6 +428,7 @@ class SchoolController extends Controller
         return $names[$type] ?? $type;
     }
 
+    // editar escuela que también edite al director en la foto que tiene en python
     public function edit(Request $request, $id)
     {
         try {
@@ -596,7 +598,6 @@ class SchoolController extends Controller
         }
     }
 
-    #actualmente el delete es de 103 líneas
     public function delete($id)
     {
         try {

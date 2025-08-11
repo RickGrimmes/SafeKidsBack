@@ -70,7 +70,7 @@ Route::prefix('api1')->group(function () {
 
         #region STUDENTS
         Route::get('students/seek-school/{schoolId}/{filter}', [StudentController::class, 'index']);
-        Route::put('students/edit-group/{studentId}', [StudentController::class, 'editGroup']);
+        Route::put('students/edit-group/{studentId}', [StudentController::class, 'editGroup']); //también edita la foto del chiquillo
         Route::delete('students/delete/{id}', [StudentController::class, 'delete']);
         Route::post('students/create/{schoolId}', [StudentController::class, 'create']);
         Route::get('students/{id}', [StudentController::class, 'show']);

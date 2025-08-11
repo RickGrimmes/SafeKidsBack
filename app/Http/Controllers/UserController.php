@@ -103,65 +103,118 @@ class UserController extends Controller
                 }
             }
 
-            $user = User::create([
-                'firstName' => $request->firstName,
-                'lastName' => $request->lastName,
-                'phone' => $request->phone,
-                'email' => $request->email,
-                'profilePhoto' => '', 
-                'password' => Hash::make($request->password),
-                'status' => true,
-            ]);
+            DB::beginTransaction();
 
-            if ($request->hasFile('profilePhoto')) {
-                $file = $request->file('profilePhoto');
-                $firstName = strtoupper(iconv('UTF-8', 'ASCII//TRANSLIT', $user->firstName));
-                $lastName = strtoupper(iconv('UTF-8', 'ASCII//TRANSLIT', $user->lastName));
-                $fullName = preg_replace('/\s+/', '', $firstName . $lastName);
-                $fileName = $user->id . '_' . $fullName . '.jpg';
-                $user->profilePhoto = $fileName;
-                $user->save();
-            }
-
-            $userRole = UserRole::create([
-                'userId' => $user->id,
-                'roleId' => $newUserRoleId,
-                'status' => true,
-                'createdBy' => $creatorId,
-            ]);
-
-            // Si es director y viene school_id, crear registro en school_users
-            if ($newUserRoleId == 3 && $request->has('school_id')) {
-                SchoolUsers::create([
-                    'schoolId' => $request->school_id,
-                    'userRoleId' => $userRole->id
+            try {
+                // 1. Crear usuario
+                $user = User::create([
+                    'firstName' => $request->firstName,
+                    'lastName' => $request->lastName,
+                    'phone' => $request->phone,
+                    'email' => $request->email,
+                    'profilePhoto' => '', 
+                    'password' => Hash::make($request->password),
+                    'status' => true,
                 ]);
-            }
-    
-            $creatorRole = UserRole::where('userId', $creatorId)->first();
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Usuario registrado correctamente',
-                'data' => [
-                    'createdUser' => $user->makeHidden(['password', '2facode', 'created_at']),
-                    'createdUserRole' => $newUserRoleId,
-                    'createdBy' => [
-                        'id' => $creatorUser->id,
-                        'name' => $creatorUser->firstName . ' ' . $creatorUser->lastName,
-                        'email' => $creatorUser->email,
-                        'role' => $creatorRole ? $creatorRole->roleId : 'Super Admin'
-                    ]
-                ],
-                'timestamp' => now(),
-            ], 200);
-        }
-        catch (\Exception $e)
-        {
-            return response()->json([
-                    'success' => false,
-                    'message' => 'Server failed',
+                // 2. Actualizar foto
+                if ($request->hasFile('profilePhoto')) {
+                    $file = $request->file('profilePhoto');
+                    $firstName = strtoupper(iconv('UTF-8', 'ASCII//TRANSLIT', $user->firstName));
+                    $lastName = strtoupper(iconv('UTF-8', 'ASCII//TRANSLIT', $user->lastName));
+                    $fullName = preg_replace('/\s+/', '', $firstName . $lastName);
+                    $fileName = $user->id . '_' . $fullName . '.jpg';
+                    $user->profilePhoto = $fileName;
+                    $user->save();
+                }
+
+                // 3. Crear UserRole
+                $userRole = UserRole::create([
+                    'userId' => $user->id,
+                    'roleId' => $newUserRoleId,
+                    'status' => true,
+                    'createdBy' => $creatorId,
+                ]);
+
+                // 4. DEBUG: Log para verificar
+                Log::info('Usuario y UserRole creados', [
+                    'user_id' => $user->id,
+                    'user_role_id' => $userRole->id,
+                    'role_id' => $newUserRoleId,
+                    'school_id_received' => $request->school_id ?? 'No recibido'
+                ]);
+
+                // 5. Si es director y viene school_id, crear registro en school_users
+                if ($newUserRoleId == 3 && $request->has('school_id')) {
+                    
+                    // Validar que la escuela existe y está activa
+                    $school = Schools::where('id', $request->school_id)
+                        ->where('status', true)
+                        ->first();
+                    
+                    if (!$school) {
+                        throw new \Exception("La escuela con ID {$request->school_id} no existe o está inactiva");
+                    }
+
+                    // Validar que el creador tiene acceso a esta escuela
+                    $creatorUserRole = UserRole::where('userId', $creatorId)->first();
+                    $ownerHasAccess = SchoolUsers::where('schoolId', $request->school_id)
+                        ->where('userRoleId', $creatorUserRole->id)
+                        ->exists();
+                    
+                    if (!$ownerHasAccess) {
+                        throw new \Exception("No tienes acceso a la escuela con ID {$request->school_id}");
+                    }
+
+                    // Crear el registro en school_users
+                    $schoolUser = SchoolUsers::create([
+                        'schoolId' => $request->school_id,
+                        'userRoleId' => $userRole->id
+                    ]);
+
+                    Log::info('SchoolUser creado', [
+                        'school_user_id' => $schoolUser->id,
+                        'school_id' => $request->school_id,
+                        'user_role_id' => $userRole->id
+                    ]);
+                }
+
+                DB::commit();
+
+                $creatorRole = UserRole::where('userId', $creatorId)->first();
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Usuario registrado correctamente' . ($newUserRoleId == 3 && $request->has('school_id') ? ' y asignado a la escuela' : ''),
+                    'data' => [
+                        'createdUser' => $user->makeHidden(['password', '2facode', 'created_at']),
+                        'createdUserRole' => $newUserRoleId,
+                        'assignedToSchool' => $newUserRoleId == 3 && $request->has('school_id') ? $request->school_id : null,
+                        'createdBy' => [
+                            'id' => $creatorUser->id,
+                            'name' => $creatorUser->firstName . ' ' . $creatorUser->lastName,
+                            'email' => $creatorUser->email,
+                            'role' => $creatorRole ? $creatorRole->roleId : 'Super Admin'
+                        ]
+                    ],
                     'timestamp' => now(),
+                ], 200);
+
+            } catch (\Exception $e) {
+                DB::rollback();
+                Log::error('Error en register()', [
+                    'error' => $e->getMessage(),
+                    'school_id' => $request->school_id ?? 'No recibido',
+                    'new_user_role_id' => $newUserRoleId ?? 'No definido'
+                ]);
+                throw $e;
+            }
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Server failed: ' . $e->getMessage(),
+                'timestamp' => now(),
             ], 500);
         }
     }

@@ -321,4 +321,70 @@ class NotificationController extends Controller
             'timestamp' => now(),
         ]);
     }
+
+    public function signalSalida()
+    {
+        try {
+            // Obtener el valor actual del cache (default: false)
+            $currentMode = cache('student_mode', false);
+            
+            // Cambiar al valor contrario
+            $newMode = !$currentMode;
+            
+            // Guardar el nuevo valor en cache (persiste indefinidamente)
+            cache(['student_mode' => $newMode], now()->addYears(10));
+            
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Modo estudiante cambiado exitosamente',
+                'data' => [
+                    'student_mode' => $newMode,
+                    'previous_mode' => $currentMode,
+                    'changed_at' => now()
+                ],
+                'timestamp' => now(),
+            ], 200);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cambiar modo estudiante: ' . $e->getMessage(),
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+
+    public function studentMode()
+    {
+        try {
+            // Obtener el valor actual del cache (default: false)
+            $currentMode = cache('student_mode', false);
+            
+            // Cambiar al valor contrario
+            $newMode = !$currentMode;
+            
+            // Guardar el nuevo valor en cache (persiste indefinidamente)
+            cache(['student_mode' => $newMode], now()->addYears(10));
+            
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Modo estudiante cambiado exitosamente',
+                'data' => [
+                    'student_mode' => $newMode,
+                    'previous_mode' => $currentMode,
+                    'changed_at' => now()
+                ],
+                'timestamp' => now(),
+            ], 200);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cambiar modo estudiante: ' . $e->getMessage(),
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
 }

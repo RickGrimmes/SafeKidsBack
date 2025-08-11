@@ -121,4 +121,8 @@ Route::prefix('api1')->group(function () {
     });
 
     #endregion
+
+    #region SEÑAL SALIDA
+    Route::post('salida/signal', [NotificationController::class, 'signalSalida']); // le dice a python que ahora se va a ir a buscar students en la salida
+    #endregion
 });

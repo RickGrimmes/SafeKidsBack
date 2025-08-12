@@ -333,17 +333,18 @@ class UserController extends Controller
 
     public function login(Request $request)
     {
-        try 
+        try
         {
             $validator = Validator::make($request->all(), [
                 'email' => 'required|email',
                 'password' => 'required|string|min:8',
             ]);
 
-            if ($validator->fails()) {
+            if ($validator->fails())
+            {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Fallo la validacion.',
+                    'message' => 'Falló la validación.',
                     'timestamp' => now(),
                 ], 400);
             }
@@ -355,31 +356,45 @@ class UserController extends Controller
                 if (!$user->status) {
                     return response()->json([
                         'success' => false,
-                        'message' => 'El usuario está inactivo.',
+                        'message' => 'El usuario está inactivo',
                         'timestamp' => now(),
                     ], 403);
                 }
 
-                $userAgent = $request->header('User-Agent');
-                $isMobile = preg_match('/Mobile|Android|iPhone|iPad|iPod/i', $userAgent);
+                $userRole = DB::table('user_roles')
+                    ->where('userId', $user->id)
+                    ->where('status', true)
+                    ->first();
 
-                $userRole = UserRole::where('userId', $user->id)->first();
+                if (!$userRole) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'El usuario no tiene un rol asignado',
+                        'timestamp' => now(),
+                    ], 403);
+                }
 
-                if ($userRole) {
+                $isDesktopApp = $request->header('X-App-Type') === 'Desktop';
+                Log::info('Login attempt: Email=' . $request->email . 
+                          ', RoleId=' . $userRole->roleId . 
+                          ', X-App-Type=' . ($request->header('X-App-Type', 'No header')) . 
+                          ', Headers=' . json_encode($request->headers->all()) . 
+                          ', Body=' . json_encode($request->all()) . 
+                          ', Path=' . $request->path());
 
-                  if (!in_array($userRole->roleId, [2, 3])) {
+                if ($userRole->roleId == 4) {
+                    if (!$isDesktopApp) {
                         return response()->json([
                             'success' => false,
-                            'message' => 'Usuario no autorizado',
+                            'message' => 'Las secretarias solo pueden loguear desde la aplicación de escritorio.',
                             'timestamp' => now(),
                         ], 403);
                     }
-
-
-                    if ($userRole->roleId == 4 && !$isMobile) {
+                } elseif (in_array($userRole->roleId, [2, 3])) {
+                    if ($isDesktopApp) {
                         return response()->json([
                             'success' => false,
-                            'message' => 'Usuario no autorizado',
+                            'message' => 'Este rol solo puede loguear desde un navegador (web).',
                             'timestamp' => now(),
                         ], 403);
                     }
@@ -390,14 +405,14 @@ class UserController extends Controller
 
                 $temporaryToken = base64_encode(json_encode([
                     'email' => $user->email,
-                    'expires_at' => now()->addMinutes(15)->timestamp
+                    'expires_at' => now()->addMinutes(15)->timestamp,
                 ]));
 
                 Mail::to($user->email)->send(new TwoFactorAuthMail($user, $code));
 
                 return response()->json([
-                    'sucess' => true,
-                    'message' => 'Código de autenticación enviado al correo electrónico',
+                    'success' => true,
+                    'message' => 'Login exitoso, código de autenticación enviado al correo',
                     'data' => $user,
                     'temporaryToken' => $temporaryToken,
                     'timestamp' => now(),
@@ -407,13 +422,14 @@ class UserController extends Controller
             {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Credenciales incorrectas',
+                    'message' => 'Credenciales inválidas',
                     'timestamp' => now(),
                 ], 401);
             }
         }
         catch (\Exception $e)
         {
+            Log::error('Error en login: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Login fallido',

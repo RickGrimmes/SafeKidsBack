@@ -18,6 +18,8 @@ use Tymon\JWTAuth\Facades\JWTAuth;
 
 class NotificationController extends Controller
 {
+    // hay que checar en la salida que si por ejemplo llega un señor que es el tío como persona autorizada y no se le ha registrado aún, que pues igual se lo pueda llevar de alguna manera, qr quizá? un código? o algo no sé
+
     public function checkIn(Request $request)
     { 
         try {
@@ -71,7 +73,6 @@ class NotificationController extends Controller
                 'status' => 'sent',
                 'created_at' => now(),
             ]);
-
             $response = [
                 'success' => true,
                 'message' => 'Coincidencia encontrada en STUDENTS',
@@ -243,10 +244,72 @@ class NotificationController extends Controller
         ]);
     }
 
-    public function sendNotification()
+    //este va primero
+    public function checkForNewNotifications(Request $request)
     {
-        // igual y usamos fcm para poder generar las notificaciones sms, hacemos que cada que se haga checkin o checkout se busque el fcm_token de los guardianes y los otros monos y se envíe un mensaje genérico que diga TIENES NOTIFICACIONES NUEVAS, PRESIONA PARA VER y ya nomás que con eso entre en la vista de notificaciones, me falta una tabla de ver notificaciones
-        // si es con fcm debo modificar la bd de guardians y de los authorized para meterles fcm_token y poder enviar la notificación
+        try {
+            $tokenPayload = JWTAuth::parseToken()->getPayload()->toArray();
+            $guardianId = $tokenPayload['sub'] ?? null;
+            $guardian = $guardianId ? Guardians::find($guardianId) : null;
+
+            if (!$guardian) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Guardian no encontrado'
+                ], 404);
+            }
+
+            $studentIds = StudentGuardian::where('guardianId', $guardian->id)
+                ->pluck('studentId')
+                ->toArray();
+
+            if (empty($studentIds)) {
+                return response()->json([
+                    'success' => true,
+                    'has_new' => false,
+                    'message' => 'Sin estudiantes asociados'
+                ]);
+            }
+
+            $lastCheck = $request->header('Last-Check') ?? $request->input('last_check');
+            
+            if (!$lastCheck) {
+                return response()->json([
+                    'success' => true,
+                    'has_new' => false,
+                    'server_time' => now()->timestamp,
+                    'message' => 'Polling iniciado'
+                ]);
+            }
+
+            $lastCheckTime = Carbon::createFromTimestamp($lastCheck);
+            
+            $hasNewNotifications = SentNotifications::whereIn('studentId', $studentIds)
+                ->where('created_at', '>', $lastCheckTime)
+                ->exists(); 
+
+            if (!$hasNewNotifications) {
+                return response()->json([
+                    'success' => true,
+                    'has_new' => false,
+                    'server_time' => now()->timestamp,
+                    'message' => 'Sin cambios'
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'has_new' => true, // verificar que este sea true para mandar la notificación, si es false entonces no se hace na
+                'server_time' => now()->timestamp,
+                'message' => 'Ha ocurrido un evento nuevo' 
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     // este ya muestra todos, ahora lo que sigue es que separe las entradas de salidas, que tome el token del guardian para ubicar al guardian, que solo tenga a sus chiquillos al alcance de los filtros y ya
@@ -328,7 +391,7 @@ class NotificationController extends Controller
         ]);
     }
 
-    public function signalSalida()
+    public function signalSalida() // CREO QUE ESTE NO SE VA A USAR, PAR USAR LOS DE PYTHON
     {
         try {
             // Obtener el valor actual del cache (default: false)
@@ -361,7 +424,7 @@ class NotificationController extends Controller
         }
     }
 
-    public function studentMode()
+    public function studentMode() // CREO QUE ESTE NO SE VA A USAR, PAR USAR LOS DE PYTHON
     {
         try {
             // Obtener el valor actual del cache (default: false)

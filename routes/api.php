@@ -105,6 +105,8 @@ Route::prefix('api1')->group(function () {
 
         #region NOTIFICATIONS
         Route::get('notifications/my-notifications/{studentId}/{dayFilter}', [NotificationController::class, 'myNotifications']);
+        Route::get('notifications/check-notifications', [NotificationController::class, 'checkForNewNotifications']);
+       
         #endregion
         
         // PARA LA CÁMARA

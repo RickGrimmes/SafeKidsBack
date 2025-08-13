@@ -35,6 +35,7 @@ class GuardianController extends Controller
                 'email' => 'required|email|unique:guardians,email',
                 'photo' => 'required|image|mimes:jpg,jpeg,png|max:2048',
                 'password' => 'required|string|min:8',
+                'fcm_token' => 'required|string',
             ]);
             
             if ($validator->fails()) {
@@ -47,12 +48,14 @@ class GuardianController extends Controller
                     $msg = 'El teléfono es obligatorio y debe tener máximo 10 dígitos.';
                 } elseif ($errors->has('email')) {
                     $msg = 'El correo es obligatorio, debe ser válido y único.';
-                } elseif ($errors->has('profilePhoto')) {
+                } elseif ($errors->has('photo')) {
                     $msg = 'La foto es obligatoria.';
                 } elseif ($errors->has('password')) {
                     $msg = 'La contraseña es obligatoria y debe tener mínimo 8 caracteres.';
                 } elseif ($errors->has('password')) {
                     $msg = 'La contraseña es obligatoria y debe tener mínimo 8 caracteres.';
+                } elseif ($errors->has('fcm_token')) { 
+                    $msg = 'El token FCM es obligatorio para recibir notificaciones.';
                 } else {
                     $msg = 'Datos inválidos.';
                 }
@@ -101,6 +104,7 @@ class GuardianController extends Controller
                 'photo' => '',
                 'password' => Hash::make($request->password),
                 'status' => true,
+                'fcm_token' => $request->fcm_token,
             ]);
 
             if ($request->hasFile('photo')) {
@@ -1124,24 +1128,32 @@ class GuardianController extends Controller
         try {
             $newToken = JWTAuth::refresh(JWTAuth::getToken());
             
-            $user = JWTAuth::setToken($newToken)->authenticate();
-            
-            $role = null;
-        if ($user instanceof User) {
-            $userRole = UserRole::where('userId', $user->id)->first();
-            $role = $userRole ? $userRole->roleId : null;
-        }
+            $authenticatedUser = JWTAuth::setToken($newToken)->authenticate();
+        
+            $guardianId = $authenticatedUser->id; 
+            $guardian = Guardians::find($guardianId); 
+        
+            $responseData = [
+                'token' => $newToken,
+                'timestamp' => now(),
+            ];
+
+            if ($guardian) {
+                $responseData['user'] = [
+                    'id' => $guardian->id,
+                    'firstName' => $guardian->firstName,
+                    'lastName' => $guardian->lastName,
+                    'email' => $guardian->email,
+                    'type' => 'guardian'
+                ];
+            } else {
+                throw new \Exception('Tipo de usuario no reconocido');
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Token renovado exitosamente',
-                'data' => [
-                    'token' => $newToken,
-                    'user' => [
-                        'id' => $user->id,
-                        'firstName' => $user->firstName,
-                        'lastName' => $user->lastName,
-                    ]
-                ],
+                'data' => $responseData,
                 'timestamp' => now(),
             ], 200);
 

@@ -4,10 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Mail\ResetPasswordMail;
 use App\Mail\TwoFactorAuthMail;
+use App\Models\AuthorizedPeople;
 use App\Models\Groups;
 use App\Models\Guardians;
 use App\Models\GuardiansSchool;
 use App\Models\Schools;
+use App\Models\StudentAuthorized;
 use App\Models\StudentGuardian;
 use App\Models\Students;
 use App\Models\User;
@@ -1172,6 +1174,125 @@ class GuardianController extends Controller
                 'success' => false,
                 'message' => 'No se pudo renovar el token',
                 'error_code' => 'TOKEN_REFRESH_FAILED',
+                'timestamp' => now(),
+            ], 500);
+        }
+    }
+
+    // para poder ver todos los chiquillos asociados ya sea a un tutor o una persona autorizada
+    public function checkOutKids($type, $id) 
+    {
+        try {
+            $validTypes = ['GUARDIANS', 'AUTHORIZEDS'];
+            if (!in_array(strtoupper($type), $validTypes)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Tipo inválido. Use GUARDIANS o AUTHORIZEDS',
+                    'timestamp' => now(),
+                ], 400);
+            }
+
+            $type = strtoupper($type);
+            $person = null;
+            $students = collect();
+
+            if ($type === 'GUARDIANS') {
+                $person = Guardians::find($id);
+                
+                if (!$person) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Guardian no encontrado',
+                        'timestamp' => now(),
+                    ], 404);
+                }
+
+                if (!$person->status) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Guardian inactivo',
+                        'timestamp' => now(),
+                    ], 403);
+                }
+
+                $studentIds = StudentGuardian::where('guardianId', $person->id)
+                    ->pluck('studentId')
+                    ->toArray();
+
+                if (!empty($studentIds)) {
+                    $students = Students::whereIn('id', $studentIds)
+                        ->where('status', true) 
+                        ->get();
+                }
+
+            } elseif ($type === 'AUTHORIZEDS') {
+                $person = AuthorizedPeople::find($id);
+                
+                if (!$person) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Persona autorizada no encontrada',
+                        'timestamp' => now(),
+                    ], 404);
+                }
+
+                if (!$person->status) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Persona autorizada inactiva',
+                        'timestamp' => now(),
+                    ], 403);
+                }
+
+                $studentIds = StudentAuthorized::where('authorizedPeopleId', $person->id)
+                    ->pluck('studentId')
+                    ->toArray();
+
+                if (!empty($studentIds)) {
+                    $students = Students::whereIn('id', $studentIds)
+                        ->where('status', true) 
+                        ->get();
+                }
+            }
+
+             $studentsWithGrade = $students->map(function ($student) {
+                $group = Groups::where('studentId', $student->id)->first();
+                return [
+                    'id' => $student->id,
+                    'firstName' => $student->firstName,
+                    'lastName' => $student->lastName,
+                    'fullName' => $student->firstName . ' ' . $student->lastName,
+                    'photo' => $student->photo,
+                    'gradeSection' => $group ? $group->gradeSection : null,
+                ];
+            });
+
+            $responseData = [
+                'person' => [
+                    'id' => $person->id,
+                    'type' => $type,
+                    'firstName' => $person->firstName,
+                    'lastName' => $person->lastName,
+                    'fullName' => $person->firstName . ' ' . $person->lastName,
+                    'phone' => $person->phone ?? null,
+                    'photo' => $person->photo ?? null,
+                ],
+                'students' => $studentsWithGrade,
+                'students_count' => $students->count(),
+                'relationship_type' => $type === 'GUARDIANS' ? 'Tutor' : 'Persona Autorizada'
+            ];
+
+            return response()->json([
+                'success' => true,
+                'message' => "Estudiantes de {$type} encontrados exitosamente",
+                'data' => $responseData,
+                'timestamp' => now(),
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al consultar estudiantes: ' . $e->getMessage(),
                 'timestamp' => now(),
             ], 500);
         }

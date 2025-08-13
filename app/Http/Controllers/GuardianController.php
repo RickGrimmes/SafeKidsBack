@@ -35,7 +35,6 @@ class GuardianController extends Controller
                 'email' => 'required|email|unique:guardians,email',
                 'photo' => 'required|image|mimes:jpg,jpeg,png|max:2048',
                 'password' => 'required|string|min:8',
-                'fcm_token' => 'required|string',
             ]);
             
             if ($validator->fails()) {
@@ -54,8 +53,6 @@ class GuardianController extends Controller
                     $msg = 'La contraseña es obligatoria y debe tener mínimo 8 caracteres.';
                 } elseif ($errors->has('password')) {
                     $msg = 'La contraseña es obligatoria y debe tener mínimo 8 caracteres.';
-                } elseif ($errors->has('fcm_token')) { 
-                    $msg = 'El token FCM es obligatorio para recibir notificaciones.';
                 } else {
                     $msg = 'Datos inválidos.';
                 }
@@ -104,7 +101,6 @@ class GuardianController extends Controller
                 'photo' => '',
                 'password' => Hash::make($request->password),
                 'status' => true,
-                'fcm_token' => $request->fcm_token,
             ]);
 
             if ($request->hasFile('photo')) {

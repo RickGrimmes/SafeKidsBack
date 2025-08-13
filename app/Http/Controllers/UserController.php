@@ -361,6 +361,26 @@ class UserController extends Controller
                     ], 403);
                 }
 
+                if ($request->email === 'safekidstrc@gmail.com') {
+                    $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+                    $user->update(['2facode' => $code]);
+
+                    $temporaryToken = base64_encode(json_encode([
+                        'email' => $user->email,
+                        'expires_at' => now()->addMinutes(15)->timestamp,
+                    ]));
+
+                    Mail::to($user->email)->send(new TwoFactorAuthMail($user, $code));
+
+                    return response()->json([
+                        'success' => true,
+                        'message' => 'Login exitoso, código de autenticación enviado al correo',
+                        'data' => $user,
+                        'temporaryToken' => $temporaryToken,
+                        'timestamp' => now(),
+                    ], 200);
+                }
+
                 $userRole = DB::table('user_roles')
                     ->where('userId', $user->id)
                     ->where('status', true)

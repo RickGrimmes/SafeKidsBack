@@ -29,6 +29,10 @@ class SentNotifications extends Model
         'templateId',
         'sentAt',
         'status',
+        'created_at',
+        'updated_at',
+        'last_message',
+        'last_type'
     ];
 
     /**
@@ -39,6 +43,8 @@ class SentNotifications extends Model
     protected $casts = [
         'sentAt' => 'datetime',
         'status' => 'string',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
     ];
 
     /**

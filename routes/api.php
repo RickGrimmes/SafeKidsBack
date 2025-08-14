@@ -93,6 +93,7 @@ Route::prefix('api1')->group(function () {
         Route::get('guardians/my-profile', [GuardianController::class, 'myProfile']);
         Route::get('guardians/my-guardians', [GuardianController::class, 'myGuardians']); // para ver a los demás tutores aparte de yo tutor, para vista móvil
         Route::get('guardians/my-kids', [GuardianController::class, 'myKids']); //para obtener a los hijos del tutor, sirve también para el filtro de mis hijos en notificaciones
+         Route::post('guardians/register/{schoolId}', [GuardianController::class, 'register']);
         Route::get('guardians/check-out-kids/{type}/{id}', [GuardianController::class, 'checkOutKids']); // para ver a todos los cihquillos relacionados en la salida, el type es para guardian o authorizeds, para que sepa a dónde ir a buscar        Route::post('guardians/register/{schoolId}', [GuardianController::class, 'register']);
         Route::post('guardians/logout', [GuardianController::class, 'logout']);
         Route::post('guardians/new-password', [GuardianController::class, 'newPassword']);

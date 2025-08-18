@@ -6,6 +6,7 @@ use App\Models\Groups;
 use App\Models\Guardians;
 use App\Models\GuardiansSchool;
 use App\Models\Schools;
+use App\Models\StudentAuthorized;
 use App\Models\StudentGuardian;
 use App\Models\Students;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -14,6 +15,7 @@ use Illuminate\Support\Facades\Validator;
 
 class StudentController extends Controller
 {
+
     public function create(Request $request, $schoolId) 
     {
         try {
@@ -85,6 +87,36 @@ class StudentController extends Controller
                     'studentId' => $student->id,
                     'guardianId' => $guardianId,
                 ]);
+            }
+
+            // ✅ NUEVO: Buscar hermanos existentes y heredar personas autorizadas
+            $inheritedAuthorized = [];
+            
+            // Buscar estudiantes que comparten los mismos tutores (hermanos)
+            $siblingStudentIds = StudentGuardian::whereIn('guardianId', $guardianIds)
+                ->where('studentId', '!=', $student->id) 
+                ->pluck('studentId')
+                ->unique()
+                ->toArray();
+
+            if (!empty($siblingStudentIds)) {
+                // Buscar personas autorizadas de los hermanos
+                $authorizedIds = StudentAuthorized::whereIn('studentId', $siblingStudentIds)
+                    ->pluck('authorizedId')
+                    ->unique()
+                    ->toArray();
+
+                // Limitar a máximo 2 personas autorizadas
+                $authorizedIds = array_slice($authorizedIds, 0, 2);
+
+                // Asignar las mismas personas autorizadas al nuevo estudiante
+                foreach ($authorizedIds as $authorizedId) {
+                    StudentAuthorized::create([
+                        'studentId' => $student->id,
+                        'authorizedId' => $authorizedId,
+                    ]);
+                    $inheritedAuthorized[] = $authorizedId;
+                }
             }
 
             return response()->json([
